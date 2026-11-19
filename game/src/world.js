@@ -73,8 +73,17 @@ export function signTexture(text, bg = '#1A2433', fg = '#FFD23F', w = 512, h = 1
   return canvasTexture(w, h, (g) => {
     g.fillStyle = bg; g.fillRect(0, 0, w, h);
     g.strokeStyle = fg; g.lineWidth = 6; g.strokeRect(6, 6, w - 12, h - 12);
-    g.fillStyle = fg; g.font = 'bold 56px sans-serif'; g.textAlign = 'center';
-    g.fillText(text, w / 2, h / 2 + 20);
+    // auto-fit: shrink the font until the whole text fits inside the
+    // board with a margin, so long names (SUNSET BAY CLUB) never clip
+    // at the left/right edges of the board
+    let size = 56;
+    g.font = `bold ${size}px sans-serif`;
+    while (size > 20 && g.measureText(text).width > w - 44) {
+      size -= 2;
+      g.font = `bold ${size}px sans-serif`;
+    }
+    g.fillStyle = fg; g.textAlign = 'center';
+    g.fillText(text, w / 2, h / 2 + size * 0.36);
   });
 }
 
@@ -102,8 +111,19 @@ export function makeBuilding(x, z, w, h, d, seed, shop = false) {
     sign: sign ? sign[0] : null, signColor: sign ? sign[1] : null,
     litRatio: 0.45 + (seed % 3) * 0.15,
   });
+  // End faces (±X, the narrow sides seen along the street) get the same
+  // facade WITHOUT the shop sign: a sign stretched across an end face
+  // reads as a clipped fragment at the frame edge (BOLT BURGER in shot 2).
+  // Material order for BoxGeometry: +x, -x, +y, -y, +z, -z.
+  const sideTex = facadeTexture({
+    base: c.base, top: c.top, floors, cols: Math.max(3, Math.round(d / 2.6)),
+    sign: null, litRatio: 0.45 + (seed % 3) * 0.15,
+  });
+  const frontMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, flatShading: true });
+  const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, roughness: 0.9, flatShading: true });
+  const capMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(c.base), roughness: 0.9, flatShading: true });
   const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, flatShading: true }));
+    [sideMat, sideMat, capMat, capMat, frontMat, frontMat]);
   body.position.y = h / 2; body.castShadow = true; body.receiveShadow = true;
   g.add(body);
   // thin roof slab + rooftop detail (AC unit / water tank / antenna)

@@ -84,7 +84,7 @@ function buildCity() {
     const l = makeStreetLamp(); l.position.set(-5.6, 0, z); scene.add(l);
     if (z % 24 === 0) { const l2 = makeStreetLamp(); l2.position.set(5.6, 0, z + 6); l2.rotation.y = Math.PI; scene.add(l2); }
   }
-  const tl1 = makeTrafficLight(); tl1.position.set(5.2, 0, 18); scene.add(tl1);
+  const tl1 = makeTrafficLight(); tl1.position.set(5.2, 0, 44); scene.add(tl1); // z=44, not 18: at z=18 its housing sat exactly in front of the SUNSET BAY CLUB billboard and hid "ET"
   const tl2 = makeTrafficLight(); tl2.position.set(-5.2, 0, 22); tl2.rotation.y = Math.PI; scene.add(tl2);
   // billboards
   const bb1 = makeBillboard('SUNSET BAY CLUB', 9.5, 34, Math.PI); scene.add(bb1);
@@ -237,11 +237,14 @@ function stageCombat() {
   const heli = makeHelicopter(); heli.position.set(-8, 20, 24); heli.rotation.y = -0.5; heli.scale.setScalar(0.8); scene.add(heli);
   scene.add(makeLightPool(-8, 24, 3.4, 4.2));
   animated.push({ update: (dt) => { heli.userData.rotor.rotation.y += dt * 18; } });
-  // pedestrians ON THE SIDEWALKS (x = ±5.8), never in the middle of the road
+  // pedestrians ON THE SIDEWALKS (x = ±5.8), never in the middle of the road.
+  // West sidewalk (side -1) spawns clear of the BOLT BURGER shop front
+  // (facade z 11.5–20.5): a pedestrian standing there hides the sign text.
   for (let i = 0; i < 6; i++) {
     const p = makePedestrian();
     const side = i % 2 === 0 ? -1 : 1;
-    p.position.set(side * (5.6 + Math.random() * 0.9), 0.06, 8 + i * 2.6 + Math.random() * 1.5);
+    const pz = side < 0 ? 22 + i * 1.6 + Math.random() * 1.5 : 8 + i * 2.6 + Math.random() * 1.5;
+    p.position.set(side * (5.6 + Math.random() * 0.9), 0.06, pz);
     p.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
     scene.add(p); peds.push(p);
     animated.push({ update: (dt) => animateWalk(p, dt, true) });

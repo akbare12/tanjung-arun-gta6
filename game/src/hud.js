@@ -175,7 +175,8 @@ export function drawMap(canvas, shot = 4) {
   for (const z of zones) {
     g.fillStyle = z.c; g.fillRect(z.x, z.y, z.w, z.h);
     g.strokeStyle = 'rgba(45,212,191,0.7)'; g.lineWidth = 2; g.strokeRect(z.x, z.y, z.w, z.h);
-    g.fillStyle = '#FFFFFF'; g.font = 'bold 13px sans-serif'; g.fillText(z.name, z.x + 12, z.y + 28);
+    // (district names are drawn LAST, with a dark halo — see end of drawMap —
+    // so the thick GPS route can never cross over the label text)
   }
   // street grid
   g.strokeStyle = 'rgba(242,242,242,0.85)'; g.lineWidth = 3;
@@ -229,6 +230,18 @@ export function drawMap(canvas, shot = 4) {
   // player marker
   g.fillStyle = '#E8443A'; g.beginPath(); g.arc(140, 430, 8, 0, Math.PI * 2); g.fill();
   g.strokeStyle = '#FFFFFF'; g.lineWidth = 2; g.stroke();
+  // district names LAST, on top of everything (route, flood boxes, pins):
+  // each label gets a dark halo plate so it stays fully readable even
+  // where the thick pink GPS route passes underneath it (BANDARA ARUN,
+  // KAMPUNG NELAYAN).
+  g.font = 'bold 13px sans-serif'; g.textAlign = 'left';
+  for (const z of zones) {
+    const tw = g.measureText(z.name).width;
+    g.fillStyle = 'rgba(10,16,27,0.88)';
+    g.fillRect(z.x + 6, z.y + 13, tw + 12, 21);
+    g.fillStyle = '#FFFFFF';
+    g.fillText(z.name, z.x + 12, z.y + 28);
+  }
   return zones;
 }
 

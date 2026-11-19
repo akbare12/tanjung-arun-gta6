@@ -25,8 +25,8 @@ export const MISSIONS = [
   { n: 2, name: 'KABUR DARI PELABUHAN', chapter: 'Ch.2', status: 'DONE', reward: 3200000, desc: 'Lepas dari razia pelabuhan sebelum fajar.' },
   { n: 3, name: 'LOOTER DI DERMAGA', chapter: 'Ch.3', status: 'DONE', reward: 4800000, desc: 'Usir penjarah dari gudang dermaga.' },
   { n: 4, name: 'BALAPAN LIAR: SUNSET SPRINT', chapter: 'Ch.4', status: 'DONE', reward: 6500000, desc: 'Menang balapan jalanan di boulevard pantai.' },
-  { n: 5, name: 'EVAKUASI BANJIR ROB', chapter: 'Ch.5', status: 'ACTIVE', reward: 8000000, desc: 'Evakuasi 12 warga Kampung Nelayan sebelum air naik.' },
-  { n: 6, name: 'MATA-MATA PELABUHAN', chapter: 'Ch.6', status: 'LOCKED', reward: 9500000, desc: 'Foto dokumen kargo di kantor pelabuhan.' },
+  { n: 5, name: 'EVAKUASI BANJIR ROB', chapter: 'Ch.5', status: 'DONE', reward: 8000000, desc: 'Evakuasi 12 warga Kampung Nelayan sebelum air naik.' },
+  { n: 6, name: 'MATA-MATA PELABUHAN', chapter: 'Ch.6', status: 'ACTIVE', reward: 9500000, desc: 'Foto dokumen kargo di kantor pelabuhan.' },
   { n: 7, name: 'BADAI ARUNIKA', chapter: 'Ch.7', status: 'LOCKED', reward: 12000000, desc: 'Selamatkan kru saat badai mencapai darat.' },
   { n: 8, name: 'LANDFALL', chapter: 'Ch.8', status: 'LOCKED', reward: 20000000, desc: 'Hadapi Det. Arya di tengah landfall.' },
 ];
