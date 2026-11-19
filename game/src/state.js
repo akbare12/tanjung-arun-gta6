@@ -1,161 +1,132 @@
-// TANJUNG ARUN game state: money, REP, wanted, storm clock, save/load.
-// One job: hold everything the game remembers and tick the systems that
-// run on their own (storm countdown, clock, heat decay).
+// TANJUNG ARUN — BADAI ARUNIKA: canonical game data.
+// ONE source of truth for every number the four screenshots show.
+// Landfall is Day 6 at 18:00. Every countdown below is computed from that
+// anchor, so the dossier can never contradict itself across shots.
+export const LANDFALL = { day: 6, hour: 18, minute: 0 };
 
-import { STORM, COLLECTIBLE, MISSIONS, SAVE_KEY, ECONOMY } from './config.js';
+export const SHOTS = {
+  chase: {
+    id: 'chase', label: 'CHASE', day: 2, time: '17:40', countdown: '4D 0H',
+    cat: 2, wind: 150, money: 12000000, repLevel: 2, rep: 180, repMax: 400,
+    missionsDone: 1, missionsTotal: 8, missionActive: 2,
+    missionName: 'BALAPAN LIAR: SPRINT SENJA', missionStage: 'STAGE 2/3',
+    progress: 0.62, wanted: 3, speed: 142, carName: 'ARUNIKA GT · MERAH',
+    condition: 82, fuel: 78, health: 100, armour: 60,
+  },
+  combat: {
+    id: 'combat', label: 'COMBAT', day: 3, time: '19:20', countdown: '2D 23H',
+    cat: 3, wind: 198, money: 24000000, repLevel: 3, rep: 420, repMax: 600,
+    missionsDone: 2, missionsTotal: 8, missionActive: 3,
+    missionName: 'PASAR GELAP: LOOTER DI PASAR IKAN', missionStage: 'STAGE 1/3',
+    progress: 0.33, wanted: 4, health: 81, armour: 60,
+    weapon: 'SMG', ammo: 30, ammoReserve: 90,
+  },
+  title: {
+    id: 'title', label: 'TITLE', day: 4, time: '09:05', countdown: '2D 9H',
+    cat: 4, wind: 239, money: 38420000, repLevel: 4, rep: 640, repMax: 900,
+    missionsDone: 5, missionsTotal: 8, completion: 46,
+  },
+  map: {
+    id: 'map', label: 'MAP', day: 4, time: '09:05', countdown: '2D 9H',
+    cat: 4, wind: 239, money: 38420000, repLevel: 4, rep: 640, repMax: 900,
+    missionsDone: 5, missionsTotal: 8, shells: 15, shellsTotal: 24, completion: 46,
+  },
+};
 
-export function freshState() {
-  return {
-    // progression
-    money: 38420000,
-    rep: 640, repNext: 900, repLevel: 4, repTitle: 'JALANAN',
-    missionIndex: 5,          // MISSION 6/12 in HUD terms (index 5 = mission 6 of 8 story + jobs)
-    missionStage: 2,          // STAGE 3/4 of the current mission
-    missionsDone: [0, 1, 2, 3, 4], // missions 1-5 DONE
-    shells: COLLECTIBLE.start, shellsTotal: COLLECTIBLE.total,
-    completion: 46,
-    stats: { carsStolen: 38, copsLost: 13, nearMiss: 27, drifts: 41, playMinutes: 123, shotsFired: 214, hits: 171 },
-    // wanted / heat
-    wanted: 0,
-    heat: 0,                  // 0-100, decays when hidden
-    wantedStatus: 'CLEAR',    // CLEAR | IN SIGHT | SEARCHING | HIDDEN
-    // storm — the hook that ticks in every scene
-    stormDay: STORM.startDay,
-    stormHoursLeft: STORM.startHoursLeft,
-    stormCat: STORM.startCat,
-    windKmh: STORM.startWindKmh,
-    curfew: false,
-    blackout: false,
-    // clock: minutes since midnight, Day 3 starts at sunset 18:52
-    day: 3,
-    clockMin: 18 * 60 + 52,
-    // disguise / heat-dump system
-    disguise: { face: 'RAKA', car: 'ORANYE', clothes: 'JAKET', camera: 'ON' },
-    garage: { armor: 1, engine: 2, nitro: false, tires: 1 },
-    // player / world (filled by main.js)
-    player: null,
-    cars: [],
-    traffic: [],
-    peds: [],
-    police: [],
-    bullets: [],
-    enemies: [],
-    popups: [],               // floating +$ scores
-    dialogue: null,           // { who, line, portrait } or null
-    objective: null,
-    screen: 'title',          // title | playing | map | phone | chapter | passed | paused | gameover
-    chapter: null,
-    passedInfo: null,
-    radioIndex: 0,
-    radioOn: true,
-    muted: false,
-    gameTime: 0,              // seconds since boot
-    lastSaveLabel: 'Ch.5 · Rp 31.420.000 · Day 3',
-  };
+export const MISSIONS = [
+  { n: 1, name: 'PELABUHAN PERTAMA', status: 'DONE', reward: 'Rp 4.000.000' },
+  { n: 2, name: 'BALAPAN LIAR: SPRINT SENJA', status: 'DONE', reward: 'Rp 6.500.000' },
+  { n: 3, name: 'PASAR GELAP: LOOTER DI PASAR IKAN', status: 'DONE', reward: 'Rp 8.000.000' },
+  { n: 4, name: 'JEMBATAN MERAH: KABUR DARI RAZIA', status: 'DONE', reward: 'Rp 9.200.000' },
+  { n: 5, name: 'GUDANG GARAM: SERBUAN SUBUH', status: 'DONE', reward: 'Rp 10.720.000' },
+  { n: 6, name: 'EVAKUASI BANJIR ROB: KAMPUNG NELAYAN', status: 'ACTIVE', reward: 'Rp 12.000.000' },
+  { n: 7, name: 'BADAI DATANG: SELAMATKAN SINTA', status: 'LOCKED', reward: 'Rp 15.000.000' },
+  { n: 8, name: 'LANDFALL: PELARIAN TERAKHIR', status: 'LOCKED', reward: 'Rp 25.000.000' },
+];
+
+export const DISASTER_JOBS = [
+  { name: 'EVAKUASI ROB — PELABUHAN', pay: 'Rp 2.400.000', status: 'OPEN' },
+  { name: 'STORM CHASER (REPEATABLE)', pay: 'Rp 1.800.000', status: 'OPEN' },
+  { name: 'PENYELAMATAN PASAR IKAN', pay: 'Rp 3.100.000', status: 'OPEN' },
+  { name: 'PENGAMANAN GUDANG GARAM', pay: 'Rp 2.000.000', status: 'DONE' },
+];
+
+export const CREW = [
+  { name: 'RAKA', role: 'KAMU · DRIVER', perk: 'Pemimpin — Semua misi +10% uang', color: '#E8443A', you: true },
+  { name: 'SINTA', role: 'WHEELMAN', perk: 'Wheelman — Drift +25%', color: '#D94F70' },
+  { name: 'DARMA', role: 'FIXER', perk: 'Fixer — Repair 25% off', color: '#F2A541' },
+  { name: 'LESTARI', role: 'HACKER', perk: 'Hacker — Police search 20% shorter', color: '#2FA8B5' },
+  { name: 'BIMO', role: 'MUSCLE', perk: 'Muscle — Damage +15%', color: '#3A9A5A' },
+];
+
+export const DISTRICTS = [
+  { name: 'KOTA TUA', seen: 92, standing: 'DIHORMATI', effect: 'Cops search 30% less long', color: '#F2C9A0' },
+  { name: 'PANTAI ARUNIKA', seen: 88, standing: 'DIHORMATI', effect: 'Nitro refills twice as fast', color: '#E8D5A3' },
+  { name: 'PELABUHAN', seen: 74, standing: 'NETRAL', effect: 'Fences pay +10% more', color: '#9FC8E8' },
+  { name: 'PASAR IKAN', seen: 81, standing: 'DIHORMATI', effect: 'Bayside Arms 15% off', color: '#A8D8C8' },
+  { name: 'MARINA', seen: 65, standing: 'NETRAL', effect: 'Boats unlocked at night', color: '#2FA8B5' },
+  { name: 'KAMPUNG NELAYAN', seen: 58, standing: 'WASPADA', effect: 'Flood rescue pays double', color: '#4A7A6A' },
+  { name: 'CBD ARUN', seen: 70, standing: 'NETRAL', effect: 'High-value cars spawn here', color: '#E8A0A0' },
+  { name: 'TAMAN SENJA', seen: 47, standing: 'WASPADA', effect: 'Fewer patrols after dark', color: '#3A9A5A' },
+  { name: 'BANDARA ARUNIKA', seen: 39, standing: 'NETRAL', effect: 'Runway sprint unlocked', color: '#B8B0A0' },
+  { name: 'PERUMAHAN BUKIT', seen: 52, standing: 'NETRAL', effect: 'Safehouse rent 20% off', color: '#C9A0E8' },
+  { name: 'STASIUN ARUN', seen: 44, standing: 'WASPADA', effect: 'Trains hide you from police', color: '#E8C85A' },
+  { name: 'PULAU KECIL', seen: 21, standing: 'WASPADA', effect: 'Smuggler boats 25% off', color: '#7FB5D5' },
+];
+
+export const GARAGE = [
+  { name: 'REPAIR', desc: 'Full body + engine fix', price: 'Rp 250rb', owned: true },
+  { name: 'RESPRAY', desc: 'New paint, clears wanted', price: 'Rp 400rb', owned: true },
+  { name: 'MESIN +12%', desc: 'Top speed +12%', price: 'Rp 4jt', owned: false },
+  { name: 'ARMOR', desc: 'Bulletproof panels', price: 'Rp 3,6jt', owned: false },
+];
+
+export const WEAPONS = [
+  { name: 'PISTOL', ammo: 12, reserve: 48, key: '1' },
+  { name: 'SMG', ammo: 30, reserve: 90, key: '2', active: true },
+  { name: 'SENAPAN', ammo: 6, reserve: 18, key: '3' },
+  { name: 'TANGAN KOSONG', ammo: Infinity, reserve: Infinity, key: '4' },
+];
+
+export const POLICE_CHASE = [
+  { unit: 'ELANG-1', kind: 'HELI', tactic: 'SPOTLIGHT', dist: 42 },
+  { unit: 'PATROLI-7', kind: 'CAR', tactic: 'RAMMING', dist: 18 },
+  { unit: 'PATROLI-12', kind: 'CAR', tactic: 'PURSUIT', dist: 26 },
+  { unit: 'PATROLI-21', kind: 'CAR', tactic: 'BOXING IN', dist: 31 },
+  { unit: 'PATROLI-33', kind: 'CAR', tactic: 'ROADBLOCK', dist: 54 },
+  { unit: 'PATROLI-44', kind: 'FOOT', tactic: 'SEARCHLIGHT', dist: 63 },
+];
+
+export const POLICE_COMBAT = [
+  { unit: 'ELANG-1', kind: 'HELI', tactic: 'SPOTLIGHT', dist: 38 },
+  { unit: 'GENG OMBAK-1', kind: 'FOOT', tactic: 'FLANKING', dist: 12 },
+  { unit: 'GENG OMBAK-2', kind: 'FOOT', tactic: 'SUPPRESSING', dist: 19 },
+  { unit: 'GENG OMBAK-3', kind: 'FOOT', tactic: 'PURSUIT', dist: 24 },
+  { unit: 'PATROLI-12', kind: 'CAR', tactic: 'ROADBLOCK', dist: 47 },
+];
+
+export const RADIOS = [
+  { name: 'VELMARA FM 88.3', song: 'Senja di Tanjung — Lestari Band' },
+  { name: 'DANGDUT ARUN 91.7', song: 'Goyang Rob — Bang Jali' },
+  { name: 'SENJA FM 104.5', song: 'Badai Arunika — Aruna' },
+];
+
+export const CAREER = {
+  carsStolen: 38, copsLost: 13, nearMisses: 27, drifts: 41,
+  shots: 214, hits: 171, playTime: '2h 3m', raceWins: 2, bestLap: '1:12',
+  kmDriven: 48.2, completion: 46,
+};
+
+export const SAVE_SLOT = {
+  chapter: 5, money: 38420000, day: 4, time: '09:05', completion: 46,
+  story: '5/8', shells: '15/24', savedAt: '09:05',
+};
+
+export function formatRupiah(n) {
+  return 'Rp ' + n.toLocaleString('id-ID');
 }
 
-export function stormCategory(windKmh) {
-  if (windKmh >= 252) return 5;
-  if (windKmh >= 210) return 4;
-  if (windKmh >= 178) return 3;
-  if (windKmh >= 154) return 2;
-  return 1;
+export function formatMoneyShort(n) {
+  if (n >= 1000000) return 'Rp ' + (n / 1000000).toLocaleString('id-ID', { maximumFractionDigits: 2 }) + 'jt';
+  return formatRupiah(n);
 }
-
-// Tick the storm + clock. gameHours is in-game hours elapsed (1 real second
-// = 1 game minute at normal speed, faster during chases).
-export function tickStorm(state, gameHours) {
-  state.stormHoursLeft = Math.max(0, state.stormHoursLeft - gameHours);
-  state.windKmh = Math.round(STORM.startWindKmh + (STORM.startHoursLeft - state.stormHoursLeft) * STORM.windPerHour);
-  state.stormCat = stormCategory(state.windKmh);
-  state.clockMin = (state.clockMin + gameHours * 60) % (24 * 60);
-  const daysPassed = Math.floor((state.clockMin + gameHours * 60) / (24 * 60));
-  if (daysPassed > 0) {
-    state.day = Math.min(7, state.day + daysPassed);
-  }
-  // Curfew + blackout kick in on Day 6 evening (mission 7's chapter).
-  state.curfew = state.day >= 6 && (state.clockMin >= 20 * 60 || state.clockMin < 5 * 60);
-  state.blackout = state.day >= 6 && state.missionIndex >= 6;
-  // The helicopter is grounded once the wind passes 220 km/h.
-  state.heliGrounded = state.windKmh >= 220;
-}
-
-export function wantedStars(state) { return state.wanted; }
-
-export function addMoney(state, n) { state.money += n; }
-export function addRep(state, n) {
-  state.rep += n;
-  while (state.rep >= state.repNext) {
-    state.rep -= state.repNext;
-    state.repLevel += 1;
-    state.repNext = Math.round(state.repNext * 1.35);
-  }
-  state.completion = Math.min(100, 46 + state.missionsDone.length * 5 + Math.floor(state.shells / 2));
-}
-
-export function raiseWanted(state, stars) {
-  state.wanted = Math.min(5, Math.max(state.wanted, stars));
-  state.wantedStatus = state.wanted > 0 ? 'IN SIGHT' : 'CLEAR';
-  state.heat = Math.min(100, state.heat + stars * 18);
-}
-
-export function clearWanted(state, how) {
-  state.wanted = 0;
-  state.heat = 0;
-  state.wantedStatus = 'CLEAR';
-  state.lastClearHow = how;
-}
-
-// ---------------------------------------------------------------- save/load
-export function saveGame(state) {
-  try {
-    const s = {
-      money: state.money, rep: state.rep, repLevel: state.repLevel, repNext: state.repNext,
-      missionIndex: state.missionIndex, missionStage: state.missionStage,
-      missionsDone: state.missionsDone, shells: state.shells,
-      stats: state.stats, day: state.day, clockMin: state.clockMin,
-      stormHoursLeft: state.stormHoursLeft, windKmh: state.windKmh,
-      disguise: state.disguise, garage: state.garage,
-      savedAt: new Date().toISOString(),
-    };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(s));
-    state.lastSaveLabel = `Ch.${state.missionIndex + 1} · Rp ${(state.money / 1000000).toFixed(2).replace('.', ',')} jt · Day ${state.day}`;
-    return true;
-  } catch { return false; }
-}
-
-export function loadSave() {
-  try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-
-export function applySave(state, s) {
-  if (!s) return;
-  state.money = s.money ?? state.money;
-  state.rep = s.rep ?? state.rep;
-  state.repLevel = s.repLevel ?? state.repLevel;
-  state.repNext = s.repNext ?? state.repNext;
-  state.missionIndex = s.missionIndex ?? state.missionIndex;
-  state.missionStage = s.missionStage ?? state.missionStage;
-  state.missionsDone = s.missionsDone ?? state.missionsDone;
-  state.shells = s.shells ?? state.shells;
-  state.stats = { ...state.stats, ...(s.stats || {}) };
-  state.day = s.day ?? state.day;
-  state.clockMin = s.clockMin ?? state.clockMin;
-  state.stormHoursLeft = s.stormHoursLeft ?? state.stormHoursLeft;
-  state.windKmh = s.windKmh ?? state.windKmh;
-  state.stormCat = stormCategory(state.windKmh);
-  state.disguise = { ...state.disguise, ...(s.disguise || {}) };
-  state.garage = { ...state.garage, ...(s.garage || {}) };
-}
-
-export function missionList(state) {
-  return MISSIONS.map((m, i) => ({
-    ...m,
-    status: state.missionsDone.includes(i) ? 'DONE' : i === state.missionIndex ? 'ACTIVE' : i < state.missionIndex ? 'DONE' : 'LOCKED',
-  }));
-}
-
-export function economyPrices() { return ECONOMY; }

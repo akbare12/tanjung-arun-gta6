@@ -1,110 +1,55 @@
-// TANJUNG ARUN procedural audio: engine, sirens, gunshots, radio.
-// One job: every sound the game makes, synthesized with WebAudio —
-// no audio files, no network, nothing to load.
-
-import { RADIO } from './config.js';
-
+// TANJUNG ARUN — BADAI ARUNIKA: tiny WebAudio synth.
+// No audio files, no network: oscillators only. Radio jingles, engine hum,
+// and a one-shot drift sting. Started only after a user gesture.
 let ctx = null;
-let engineOsc = null, engineGain = null;
-let radioTimer = null;
-let sirenOsc = null, sirenGain = null;
+let engineOsc = null;
+let engineGain = null;
 
 export function ensureAudio() {
-  try {
-    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-    if (ctx.state === 'suspended') ctx.resume();
-  } catch { /* audio is optional; the game plays silent */ }
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === 'suspended') ctx.resume();
   return ctx;
 }
 
-export function setEngine(speed01, on) {
-  if (!ctx || !on) { if (engineGain) engineGain.gain.value = 0; return; }
-  try {
-    if (!engineOsc) {
-      engineOsc = ctx.createOscillator();
-      engineOsc.type = 'sawtooth';
-      engineGain = ctx.createGain();
-      engineGain.gain.value = 0;
-      const filt = ctx.createBiquadFilter();
-      filt.type = 'lowpass'; filt.frequency.value = 900;
-      engineOsc.connect(filt); filt.connect(engineGain); engineGain.connect(ctx.destination);
-      engineOsc.start();
-    }
-    engineOsc.frequency.value = 60 + speed01 * 160;
-    engineGain.gain.value = 0.03 + speed01 * 0.05;
-  } catch { /* ignore */ }
+function blip(freq, dur, type = 'sine', vol = 0.12, when = 0) {
+  const c = ensureAudio();
+  const o = c.createOscillator();
+  const g = c.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, c.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + when + dur);
+  o.connect(g).connect(c.destination);
+  o.start(c.currentTime + when);
+  o.stop(c.currentTime + when + dur + 0.05);
 }
 
-export function setSiren(on, wanted) {
-  if (!ctx) return;
-  try {
-    if (on && !sirenOsc) {
-      sirenOsc = ctx.createOscillator();
-      sirenOsc.type = 'sine';
-      sirenGain = ctx.createGain();
-      sirenGain.gain.value = 0.02;
-      sirenOsc.connect(sirenGain); sirenGain.connect(ctx.destination);
-      sirenOsc.start();
-      let hi = false;
-      sirenOsc._iv = setInterval(() => { sirenOsc.frequency.value = hi ? 950 : 700; hi = !hi; }, 420);
-    } else if (!on && sirenOsc) {
-      clearInterval(sirenOsc._iv);
-      sirenOsc.stop(); sirenOsc = null; sirenGain = null;
-    }
-    if (sirenGain) sirenGain.gain.value = 0.012 + wanted * 0.004;
-  } catch { /* ignore */ }
+// VELMARA FM jingle: a little dangdut-ish pentatonic riff.
+export function startRadio() {
+  const notes = [523, 587, 659, 784, 659, 587, 523, 392];
+  notes.forEach((f, i) => blip(f, 0.22, 'triangle', 0.1, i * 0.16));
+  blip(130, 0.5, 'sine', 0.14, 0);
 }
 
-export function blip(freq = 880, dur = 0.08, type = 'square', vol = 0.05) {
-  if (!ctx) return;
-  try {
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = type; o.frequency.value = freq;
-    g.gain.setValueAtTime(vol, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
-    o.connect(g); g.connect(ctx.destination);
-    o.start(); o.stop(ctx.currentTime + dur);
-  } catch { /* ignore */ }
+// Engine hum that follows speed (0..1).
+export function engineHum(level) {
+  if (level <= 0.02) {
+    if (engineOsc) { try { engineOsc.stop(); } catch { /* already stopped */ } engineOsc = null; }
+    return;
+  }
+  const c = ensureAudio();
+  if (!engineOsc) {
+    engineOsc = c.createOscillator();
+    engineGain = c.createGain();
+    engineOsc.type = 'sawtooth';
+    engineOsc.connect(engineGain).connect(c.destination);
+    engineOsc.start();
+  }
+  engineOsc.frequency.setTargetAtTime(55 + level * 130, c.currentTime, 0.08);
+  engineGain.gain.setTargetAtTime(0.015 + level * 0.03, c.currentTime, 0.08);
 }
 
-export function gunshot() {
-  if (!ctx) return;
-  try {
-    const len = ctx.sampleRate * 0.12;
-    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    const src = ctx.createBufferSource(); src.buffer = buf;
-    const g = ctx.createGain(); g.gain.value = 0.16;
-    src.connect(g); g.connect(ctx.destination); src.start();
-  } catch { /* ignore */ }
+// Drift sting: rising two-note chirp.
+export function driftSting() {
+  blip(880, 0.12, 'square', 0.06, 0);
+  blip(1320, 0.18, 'square', 0.06, 0.1);
 }
-
-export function cashSound() { blip(1320, 0.09, 'sine', 0.06); setTimeout(() => blip(1760, 0.12, 'sine', 0.06), 90); }
-export function missionPassSound() {
-  [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => blip(f, 0.22, 'triangle', 0.07), i * 130));
-}
-
-// Radio: a tiny procedural "song" per station — a looping bassline + lead
-// notes from a pentatonic set, different tempo/scale per station.
-const SCALES = {
-  '101.9': { bpm: 132, notes: [220, 262, 294, 330, 392, 440], wave: 'triangle' }, // dangdut-ish
-  '88.1': { bpm: 96, notes: [196, 220, 247, 294, 330, 392], wave: 'sine' },     // synthwave
-  '99.5': { bpm: 60, notes: [330, 330, 392, 330], wave: 'square' },             // emergency beeps
-};
-
-export function startRadio(stationId) {
-  stopRadio();
-  if (!ctx) return;
-  const sc = SCALES[stationId] || SCALES['88.1'];
-  const stepMs = 60000 / sc.bpm / 2;
-  let i = 0;
-  radioTimer = setInterval(() => {
-    if (!ctx) return;
-    const n = sc.notes[i % sc.notes.length];
-    blip(i % 4 === 0 ? n / 2 : n, 0.16, sc.wave, i % 4 === 0 ? 0.05 : 0.028);
-    i++;
-  }, stepMs);
-}
-export function stopRadio() { if (radioTimer) { clearInterval(radioTimer); radioTimer = null; } }
-export function radioStation(i) { return RADIO[i % RADIO.length]; }

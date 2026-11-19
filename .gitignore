@@ -1,4 +1,7 @@
+node_modules/
 out/
+out2/
 *.log
+.DS_Store
 grade-local*.json
-shots/
+shots-check/
