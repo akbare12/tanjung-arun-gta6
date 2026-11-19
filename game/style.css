@@ -1,0 +1,6 @@
+/* TANJUNG ARUN — page chrome. The game itself is drawn on the canvas. */
+html, body { margin: 0; padding: 0; background: #0a0f18; color: #fff; font-family: monospace, sans-serif; overflow: hidden; }
+#wrap { width: 1280px; margin: 0 auto; padding: 0; }
+#game { display: block; width: 1280px; height: 800px; background: #141a24; border: 2px solid #e8b23a; }
+#help { margin-top: 8px; font-size: 13px; color: #c9c9c9; line-height: 1.5; }
+#help b { color: #ffd23a; }
