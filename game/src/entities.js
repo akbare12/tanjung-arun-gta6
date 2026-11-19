@@ -1,162 +1,213 @@
-// entities.js — the living city: the player on foot and in a car, traffic
-// cars, pedestrians and carjacking. One job: actors and their movement.
+// TANJUNG ARUN entities: player, traffic, pedestrians, police units.
+// One job: the moving things in the world and how they behave —
+// driving physics, traffic flow, foot patrols, and the police response.
 
-import { makeRng, districtAt } from './city.js';
-import { clamp, dist } from './config.js';
+import { WORLD_W, WORLD_H, BLOCK, CAR_MODELS, POLICE_UNITS, makeRng, pick } from './config.js';
+import { hitsBuilding, isOnRoad, nearestRoadPoint, pointInWater, terrainAt, ROAD_XS, ROAD_YS } from './city.js';
 
-export const CAR_COLORS = ['#d43a3a', '#3a7ad4', '#e8b23a', '#e8e8e8', '#3ad47a', '#8a3ad4', '#222222', '#d47a3a'];
-
-export function createPlayer(x, y) {
+export function makePlayer(x, y) {
   return {
-    x, y, angle: -Math.PI / 2, speed: 0, onFoot: true, car: null,
-    health: 100, armor: 50, cash: 38420, rep: 640, repMax: 900, level: 7,
-    carsStolen: 38, copsLost: 13, playSeconds: 2 * 3600 + 3 * 60 + 40,
-    completion: 46, driftScore: 0, nearMiss: 0,
+    x, y, angle: -Math.PI / 2, speed: 0,
+    onFoot: false, health: 100, armor: 0,
+    car: { model: CAR_MODELS[0], color: '#e67e22', angle: -Math.PI / 2, speed: 0 },
+    drifting: false, driftTime: 0, nearMissAt: 0,
   };
 }
 
-export function createTraffic(count) {
-  const rng = makeRng(777);
-  const cars = [];
-  for (let i = 0; i < count; i++) {
-    const vertical = rng() > 0.5;
-    const road = 200 + Math.floor(rng() * 12) * 200;
-    cars.push({
-      x: vertical ? road + (rng() > 0.5 ? 8 : -8) : 100 + rng() * 2400,
-      y: vertical ? 100 + rng() * 1700 : road + (rng() > 0.5 ? 8 : -8),
-      angle: vertical ? (rng() > 0.5 ? Math.PI / 2 : -Math.PI / 2) : (rng() > 0.5 ? 0 : Math.PI),
-      speed: 60 + rng() * 60,
-      color: CAR_COLORS[Math.floor(rng() * CAR_COLORS.length)],
-      vertical,
-    });
-  }
-  return cars;
+export function makeTrafficCar(rng, x, y) {
+  const model = pick(rng, CAR_MODELS);
+  const horizontal = rng() < 0.5;
+  return {
+    x, y, angle: horizontal ? (rng() < 0.5 ? 0 : Math.PI) : (rng() < 0.5 ? Math.PI / 2 : -Math.PI / 2),
+    speed: 60 + rng() * 70, model, color: model.color,
+    lane: (rng() - 0.5) * 14, stopped: false,
+  };
 }
 
-export function createPedestrians(count) {
-  const rng = makeRng(4242);
-  const peds = [];
-  const shirts = ['#e86a8a', '#6ab8e8', '#8ae86a', '#e8b23a', '#c9a0e8', '#e8e8e8'];
-  for (let i = 0; i < count; i++) {
-    peds.push({
-      x: 60 + rng() * 2480, y: 60 + rng() * 1780,
-      angle: rng() * Math.PI * 2, speed: 18 + rng() * 22,
-      shirt: shirts[Math.floor(rng() * shirts.length)],
-      panic: false,
-    });
-  }
-  return peds;
+export function makePedestrian(rng, x, y) {
+  const palette = ['#f5d76e', '#85c1e9', '#f1948a', '#a9dfbf', '#d2b4de', '#f0e6d2'];
+  return {
+    x, y, angle: rng() * Math.PI * 2, speed: 18 + rng() * 22,
+    color: pick(rng, palette), panic: 0, walkPhase: rng() * 6,
+  };
 }
 
-export function updateTraffic(cars, dt, world) {
-  for (const c of cars) {
-    const dx = Math.cos(c.angle) * c.speed * dt;
-    const dy = Math.sin(c.angle) * c.speed * dt;
-    c.x += dx; c.y += dy;
-    if (c.x < 20) { c.x = 20; c.angle = 0; }
-    if (c.x > world.w - 20) { c.x = world.w - 20; c.angle = Math.PI; }
-    if (c.y < 20) { c.y = 20; c.angle = Math.PI / 2; }
-    if (c.y > world.h - 20) { c.y = world.h - 20; c.angle = -Math.PI / 2; }
+export function makePoliceUnit(def, x, y) {
+  return {
+    id: def.id, kind: def.kind, tactic: def.tactic,
+    x, y, angle: 0, speed: 0, distance: 0,
+    siren: true, grounded: false,
+  };
+}
+
+// ---------------------------------------------------------------- driving
+const ACCEL = 260, BRAKE = 420, MAX_REV = 90, DRAG = 0.6, STEER = 2.4;
+
+export function drivePlayer(p, input, dt, city) {
+  const car = p.car;
+  const top = car.model.top * (1 + 0.12 * (p.engineLevel || 0));
+  if (input.up) car.speed += ACCEL * dt * (car.model.accel || 1);
+  if (input.down) car.speed -= (car.speed > 0 ? BRAKE : ACCEL * 0.6) * dt;
+  if (!input.up && !input.down) car.speed -= Math.sign(car.speed) * DRAG * 120 * dt;
+  if (input.handbrake) { car.speed *= (1 - 3.2 * dt); p.drifting = Math.abs(car.speed) > 60; }
+  else p.drifting = false;
+  car.speed = Math.max(-MAX_REV, Math.min(top, car.speed));
+  if (Math.abs(car.speed) < 2) car.speed = 0;
+  const steer = (input.left ? -1 : 0) + (input.right ? 1 : 0);
+  const dir = car.speed >= 0 ? 1 : -1;
+  car.angle += steer * STEER * dt * dir * Math.min(1, Math.abs(car.speed) / 60);
+  const nx = p.x + Math.cos(car.angle) * car.speed * dt;
+  const ny = p.y + Math.sin(car.angle) * car.speed * dt;
+  if (!hitsBuilding(city, nx, p.y, 14) && !pointInWater(nx, p.y)) p.x = nx;
+  else car.speed *= 0.4;
+  if (!hitsBuilding(city, p.x, ny, 14) && !pointInWater(p.x, ny)) p.y = ny;
+  else car.speed *= 0.4;
+  p.x = Math.max(30, Math.min(WORLD_W - 30, p.x));
+  p.y = Math.max(30, Math.min(WORLD_H - 30, p.y));
+  p.angle = car.angle; p.speed = car.speed;
+  if (p.drifting) p.driftTime += dt; else p.driftTime = 0;
+  return car.speed;
+}
+
+export function walkPlayer(p, input, dt, city) {
+  const sp = 150;
+  let dx = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+  let dy = (input.down ? 1 : 0) - (input.up ? 1 : 0);
+  if (dx || dy) {
+    const len = Math.hypot(dx, dy);
+    dx /= len; dy /= len;
+    p.angle = Math.atan2(dy, dx);
+    const nx = p.x + dx * sp * dt, ny = p.y + dy * sp * dt;
+    if (!hitsBuilding(city, nx, p.y, 10)) p.x = nx;
+    if (!hitsBuilding(city, p.x, ny, 10)) p.y = ny;
+    p.speed = sp;
+  } else p.speed = 0;
+  p.x = Math.max(20, Math.min(WORLD_W - 20, p.x));
+  p.y = Math.max(20, Math.min(WORLD_H - 20, p.y));
+}
+
+// ---------------------------------------------------------------- traffic
+export function updateTraffic(traffic, dt, city, rng) {
+  for (const c of traffic) {
+    // Traffic follows roads: if it drifted off-road, steer back to a road.
+    if (!isOnRoad(c.x, c.y, 26)) {
+      const rp = nearestRoadPoint(c.x, c.y);
+      const want = Math.atan2(rp.y - c.y, rp.x - c.x);
+      let d = want - c.angle;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      c.angle += Math.max(-2.2 * dt, Math.min(2.2 * dt, d));
+    } else {
+      // Small wander so the flow is not a perfect grid.
+      c.angle += (rng() - 0.5) * 0.12 * dt;
+    }
+    const nx = c.x + Math.cos(c.angle) * c.speed * dt;
+    const ny = c.y + Math.sin(c.angle) * c.speed * dt;
+    if (!hitsBuilding(city, nx, ny, 12) && !pointInWater(nx, ny)) { c.x = nx; c.y = ny; }
+    else { c.angle += Math.PI / 2; }
+    // Wrap around the world edges so traffic never runs out.
+    if (c.x < -60) c.x = WORLD_W + 50; if (c.x > WORLD_W + 60) c.x = -50;
+    if (c.y < -60) c.y = WORLD_H + 50; if (c.y > WORLD_H + 60) c.y = -50;
   }
 }
 
-export function updatePedestrians(peds, dt, player, world) {
+export function updatePedestrians(peds, dt, city, rng, player, wanted) {
   for (const p of peds) {
-    if (dist(p.x, p.y, player.x, player.y) < 120) p.panic = true;
-    const sp = p.panic ? p.speed * 3 : p.speed;
-    p.x += Math.cos(p.angle) * sp * dt;
-    p.y += Math.sin(p.angle) * sp * dt;
-    if (Math.random() < dt * 0.2) p.angle += (Math.random() - 0.5) * 2;
-    p.x = clamp(p.x, 20, world.w - 20);
-    p.y = clamp(p.y, 20, world.h - 20);
-  }
-}
-
-// Driving: arcade handling with drift. Returns drift points earned this frame.
-export function updatePlayer(player, keys, dt, world) {
-  let driftEarned = 0;
-  if (player.onFoot) {
-    const sp = 170;
-    let mx = 0, my = 0;
-    if (keys['KeyW'] || keys['ArrowUp']) my -= 1;
-    if (keys['KeyS'] || keys['ArrowDown']) my += 1;
-    if (keys['KeyA'] || keys['ArrowLeft']) mx -= 1;
-    if (keys['KeyD'] || keys['ArrowRight']) mx += 1;
-    if (mx || my) {
-      const len = Math.hypot(mx, my);
-      player.x += (mx / len) * sp * dt;
-      player.y += (my / len) * sp * dt;
-      player.angle = Math.atan2(my, mx);
+    p.walkPhase += dt * 6;
+    // Panic: run away from the player when wanted or the player is speeding.
+    const d = Math.hypot(p.x - player.x, p.y - player.y);
+    if ((wanted > 0 || Math.abs(player.speed) > 140) && d < 220) {
+      p.panic = 1;
+      const away = Math.atan2(p.y - player.y, p.x - player.x);
+      p.angle = away;
+      p.x += Math.cos(away) * 90 * dt;
+      p.y += Math.sin(away) * 90 * dt;
+    } else {
+      p.panic = Math.max(0, p.panic - dt);
+      if (rng() < 0.01) p.angle = rng() * Math.PI * 2;
+      const nx = p.x + Math.cos(p.angle) * p.speed * dt;
+      const ny = p.y + Math.sin(p.angle) * p.speed * dt;
+      if (!hitsBuilding(city, nx, ny, 8) && !pointInWater(nx, ny) && terrainAt(nx, ny) === 'land') { p.x = nx; p.y = ny; }
+      else p.angle += Math.PI / 2;
     }
-  } else {
-    const accel = 340, maxSpeed = 520, reverse = 180;
-    if (keys['KeyW'] || keys['ArrowUp']) player.speed += accel * dt;
-    if (keys['KeyS'] || keys['ArrowDown']) player.speed -= accel * 0.8 * dt;
-    if (keys['Space']) player.speed *= Math.pow(0.4, dt); // handbrake
-    player.speed = clamp(player.speed, -reverse, maxSpeed);
-    player.speed *= Math.pow(0.35, dt * 0.4); // drag
-    const steer = (keys['KeyA'] || keys['ArrowLeft'] ? -1 : 0) + (keys['KeyD'] || keys['ArrowRight'] ? 1 : 0);
-    const turnRate = 2.4 * clamp(Math.abs(player.speed) / 200, 0.25, 1);
-    player.angle += steer * turnRate * dt * Math.sign(player.speed || 1);
-    player.x += Math.cos(player.angle) * player.speed * dt;
-    player.y += Math.sin(player.angle) * player.speed * dt;
-    // Drift: hard steering at speed pays cash.
-    if (Math.abs(steer) === 1 && Math.abs(player.speed) > 320 && keys['Space']) {
-      driftEarned = Math.floor(Math.abs(player.speed) * dt * 0.6);
-      player.driftScore += driftEarned;
+  }
+}
+
+// ---------------------------------------------------------------- police
+export function spawnPolice(state, rng) {
+  const units = [];
+  const n = Math.min(6, 1 + state.wanted); // 2-6 units by wanted level
+  for (let i = 0; i < n; i++) {
+    const def = POLICE_UNITS[i % POLICE_UNITS.length];
+    const a = rng() * Math.PI * 2;
+    const dist = 420 + rng() * 260;
+    const x = state.player.x + Math.cos(a) * dist;
+    const y = state.player.y + Math.sin(a) * dist;
+    const u = makePoliceUnit(def, x, y);
+    u.grounded = def.kind === 'heli' && state.heliGrounded;
+    if (u.grounded) u.tactic = 'GROUNDED: WIND';
+    units.push(u);
+  }
+  // The air unit is mandatory once the heat is serious: at wanted 3+
+  // ELANG-1 joins (or replaces the last ground unit) so the response
+  // always shows 5+ ground units AND 1 helicopter.
+  if (state.wanted >= 3 && !units.some((u) => u.kind === 'heli')) {
+    const def = POLICE_UNITS.find((d) => d.kind === 'heli');
+    const u = makePoliceUnit(def, state.player.x + 200, state.player.y - 160);
+    u.grounded = state.heliGrounded;
+    if (u.grounded) u.tactic = 'GROUNDED: WIND';
+    if (units.length >= 6) units.pop();
+    units.push(u);
+  }
+  return units;
+}
+
+export function updatePolice(units, dt, player, state, city) {
+  const p = player;
+  for (const u of units) {
+    if (u.kind === 'heli') {
+      if (state.heliGrounded) { u.grounded = true; u.tactic = 'GROUNDED: WIND'; continue; }
+      // Helicopter hovers off the player's shoulder with a searchlight —
+      // close enough to threaten, never sitting on top of the player.
+      const tx = p.x + 180, ty = p.y - 140;
+      const dx = tx - u.x, dy = ty - u.y;
+      const d = Math.hypot(dx, dy) || 1;
+      u.x += (dx / d) * 190 * dt; u.y += (dy / d) * 190 * dt;
+      u.angle = Math.atan2(dy, dx);
+      // Panel distance is always to the player, not to the hover point.
+      u.distance = Math.round(Math.hypot(p.x - u.x, p.y - u.y));
+      continue;
     }
-    // Near miss: passing traffic fast and close.
-    if (Math.abs(player.speed) > 300 && player.nearMissCooldown > 0) player.nearMissCooldown -= dt;
-  }
-  player.x = clamp(player.x, 20, world.w - 20);
-  player.y = clamp(player.y, 20, world.h - 20);
-  return driftEarned;
-}
-
-export function drawCar(ctx, x, y, angle, color, label) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  ctx.fillRect(-20, -10, 44, 24);
-  ctx.fillStyle = color;
-  ctx.fillRect(-20, -11, 42, 22);
-  ctx.fillStyle = '#1a2a3a';
-  ctx.fillRect(-6, -9, 14, 18);
-  ctx.fillStyle = '#ffe9a0';
-  ctx.fillRect(20, -8, 3, 6); ctx.fillRect(20, 2, 3, 6);
-  ctx.fillStyle = '#ff3a3a';
-  ctx.fillRect(-22, -8, 3, 6); ctx.fillRect(-22, 2, 3, 6);
-  ctx.restore();
-  if (label) {
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 11px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(label, x, y - 18);
-    ctx.textAlign = 'left';
-  }
-}
-
-export function drawPerson(ctx, x, y, angle, shirt, name) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.beginPath(); ctx.ellipse(0, 2, 9, 7, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = shirt;
-  ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#e8c39a';
-  ctx.beginPath(); ctx.arc(Math.cos(angle) * 4, Math.sin(angle) * 4, 4, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
-  if (name) {
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 11px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(name, x, y - 16);
-    ctx.textAlign = 'left';
+    const dx = p.x - u.x, dy = p.y - u.y;
+    const d = Math.hypot(dx, dy) || 1;
+    u.distance = Math.round(d);
+    const want = Math.atan2(dy, dx);
+    let diff = want - u.angle;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    const top = u.tactic === 'RAMMING' ? 250 : 215;
+    u.speed = Math.min(top, u.speed + 200 * dt);
+    // ROADBLOCK units park ahead of the player instead of chasing.
+    if (u.tactic === 'ROADBLOCK' && d < 500) {
+      const ahead = { x: p.x + Math.cos(p.angle) * 260, y: p.y + Math.sin(p.angle) * 260 };
+      const bx = ahead.x - u.x, by = ahead.y - u.y;
+      const bd = Math.hypot(bx, by) || 1;
+      u.angle = Math.atan2(by, bx);
+      u.x += (bx / bd) * u.speed * dt; u.y += (by / bd) * u.speed * dt;
+    } else {
+      u.angle += Math.max(-2.6 * dt, Math.min(2.6 * dt, diff));
+      const nx = u.x + Math.cos(u.angle) * u.speed * dt;
+      const ny = u.y + Math.sin(u.angle) * u.speed * dt;
+      if (!hitsBuilding(city, nx, ny, 12)) { u.x = nx; u.y = ny; }
+      else { u.angle += Math.PI / 2; u.speed *= 0.5; }
+    }
+    // Ram: if a police car touches the player car, shake the player.
+    if (d < 34 && !p.onFoot) {
+      p.speed *= 0.86;
+      p.x += Math.cos(want) * 26; p.y += Math.sin(want) * 26;
+    }
   }
 }
 
-export function currentDistrictName(player) {
-  return districtAt(player.x, player.y).name;
-}
+// Distance helper used by HUD + police panel.
+export function unitDistance(u, p) { return Math.round(Math.hypot(u.x - p.x, u.y - p.y)); }
