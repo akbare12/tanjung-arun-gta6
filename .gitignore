@@ -1,7 +1,7 @@
-node_modules/
 out/
-out2/
-*.log
+node_modules/
 .DS_Store
 grade-local*.json
-shots-check/
+shot-*.png
+shot-*.jpg
+verify/

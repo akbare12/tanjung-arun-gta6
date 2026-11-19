@@ -1,12 +1,6 @@
-// TANJUNG ARUN — BADAI ARUNIKA: HUD. All HUD is DOM over the 3D canvas,
-// so every number is crisp and every coherence figure is one string in
-// state.js. Layout follows the template the top-10 covers share.
-import {
-  SHOTS, MISSIONS, DISASTER_JOBS, CREW, DISTRICTS, GARAGE, WEAPONS,
-  POLICE_CHASE, POLICE_COMBAT, RADIOS, CAREER, SAVE_SLOT,
-  formatRupiah, formatMoneyShort,
-} from './state.js';
-import { drawMinimap } from './minimap.js';
+// hud.js — every HUD panel, the round minimap and the full 2D city map.
+// All numbers come from state.js, so the dossier shots can never disagree.
+import { SHOTS, MISSIONS, DISASTER_JOBS, CREW, DISTRICTS, GARAGE, POLICE_UNITS, WEAPONS, RADIOS, CAREER, DIALOGUE, STREETS, fmtRp } from './state.js';
 
 export function el(tag, cls, html = '') {
   const e = document.createElement(tag);
@@ -15,206 +9,298 @@ export function el(tag, cls, html = '') {
   return e;
 }
 
-function stars(n) {
-  let s = '';
-  for (let i = 0; i < 5; i++) s += `<span class="star ${i < n ? 'on' : ''}">★</span>`;
-  return s;
+export function stars(n, max = 5) {
+  return '★'.repeat(n) + '☆'.repeat(Math.max(0, max - n));
 }
 
-function moneyBlock(shot) {
-  return el('div', 'hud-money',
-    `<div class="money">${formatRupiah(shot.money)}</div>
-     <div class="wanted">${stars(shot.wanted || 3)}</div>
-     <div class="rep">REP LV${shot.repLevel} · ${shot.rep}/${shot.repMax}</div>`);
+export function moneyPanel(shot) {
+  const s = SHOTS[shot];
+  return el('div', 'hud-panel money-panel',
+    `<div class="money">${fmtRp(s.money)}</div>
+     <div class="stars">${stars(shot === 1 ? 3 : shot === 2 ? 4 : 2)}</div>
+     <div class="rep">REP LV${s.repLevel} · ${s.rank} · ${s.rep}/${s.repMax}</div>
+     <div class="repbar"><i style="width:${Math.round((s.rep / s.repMax) * 100)}%"></i></div>`);
 }
 
-function stormChip(shot) {
-  return el('div', 'hud-storm',
+export function stormPanel(shot) {
+  const s = SHOTS[shot];
+  return el('div', 'hud-panel storm-panel',
     `<div class="storm-title">🌀 BADAI ARUNIKA</div>
-     <div class="storm-line">LANDFALL IN <b>${shot.countdown}</b> · DAY ${shot.day} · ${shot.time}</div>
-     <div class="storm-line">CAT ${shot.cat} · ANGIN ${shot.wind} KM/H · LANDFALL D6 18:00</div>`);
+     <div class="storm-count">${s.countdown}</div>
+     <div class="storm-cat">CAT ${s.cat} · ANGIN ${s.wind} KM/H</div>
+     <div class="storm-land">LANDFALL · DAY 6 · 18:00</div>`);
 }
 
-function missionPanel(shot) {
-  const p = el('div', 'hud-mission',
-    `<div class="mission-kicker">MISI ${shot.missionActive}/8 · ${shot.missionStage}</div>
-     <div class="mission-name">${shot.missionName}</div>
-     <div class="mission-bar"><i style="width:${Math.round(shot.progress * 100)}%"></i></div>
-     <div class="mission-sub">Ikuti rute GPS · Jauhi roadblock · REP +120</div>`);
+export function missionPanel(shot, missionIdx = 4, stage = '2/3') {
+  const s = SHOTS[shot];
+  const m = MISSIONS[missionIdx];
+  const p = el('div', 'hud-panel mission-panel',
+    `<div class="mission-title">MISI ${m.n}/8 · ${m.name}</div>
+     <div class="mission-stage">STAGE ${stage} · ${m.desc}</div>
+     <div class="mission-bar"><i style="width:${(m.n / 8) * 100}%"></i></div>
+     <div class="mission-meta">DAY ${s.day} · ${s.time} · ${fmtRp(s.money)}</div>`);
   return p;
 }
 
-function policePanel(units, title = 'POLISI MENGEJAR') {
-  const rows = units.map(u =>
-    `<div class="pol-row"><span class="pol-unit">${u.unit}</span>
-     <span class="pol-tactic ${u.tactic.replace(/ /g, '-')}">${u.tactic}</span>
-     <span class="pol-dist">${u.dist} m</span></div>`).join('');
-  return el('div', 'hud-police',
-    `<div class="pol-title">${title}</div>${rows}`);
+export function policePanel(units = POLICE_UNITS, title = 'POLISI · 6 UNIT') {
+  const rows = units.map((u) => `
+    <div class="pol-row"><span class="pol-unit">${u.unit}</span>
+    <span class="pol-tactic" style="color:${u.color}">${u.tactic}</span>
+    <span class="pol-dist">${u.dist} m</span></div>`).join('');
+  return el('div', 'hud-panel police-panel', `<div class="panel-title">${title}</div>${rows}`);
 }
 
-function weaponWheel(activeName) {
-  const slots = WEAPONS.map(w => {
-    const ammo = w.ammo === Infinity ? '∞' : `${w.ammo}/${w.reserve}`;
-    return `<div class="wheel-slot ${w.name === activeName ? 'active' : ''}">
-      <div class="wheel-key">${w.key}</div><div class="wheel-name">${w.name}</div>
-      <div class="wheel-ammo">${ammo}</div></div>`;
-  }).join('');
-  return el('div', 'hud-wheel', `<div class="wheel-title">SENJATA</div>${slots}`);
+export function disguisePanel(active = 'CAR') {
+  const tabs = ['FACE', 'CAR', 'CLOTHES', 'CAMERA'].map((t) =>
+    `<span class="dis-tab${t === active ? ' on' : ''}">${t}</span>`).join('');
+  return el('div', 'hud-panel disguise-panel',
+    `<div class="panel-title">DISGUISE</div><div class="dis-tabs">${tabs}</div>
+     <div class="dis-note">RESPRAY ${fmtRp(400000)} · CLEARS 1 STAR</div>`);
 }
 
-function disguiseTabs() {
-  return el('div', 'hud-disguise',
-    `<div class="dis-title">PENYAMARAN</div>
-     <div class="dis-tabs"><span class="dis-tab active">FACE</span><span class="dis-tab">CAR</span>
-     <span class="dis-tab">CLOTHES</span><span class="dis-tab">CAMERA</span></div>
-     <div class="dis-line">RESPRAY Rp 150.000 — clears wanted</div>
-     <div class="dis-line">HEAT 82% · WITNESS: NONE</div>`);
+export function weaponWheel(activeIdx = 1) {
+  const slots = WEAPONS.map((w, i) => `
+    <div class="wheel-slot${i === activeIdx ? ' active' : ''}">
+      <span class="wheel-key">${w.key}</span><span class="wheel-name">${w.name}</span>
+      <span class="wheel-ammo">${w.ammo}</span></div>`).join('');
+  return el('div', 'hud-panel weapon-wheel', `<div class="panel-title">SENJATA</div>${slots}`);
 }
 
-function dialogue(name, color, text) {
-  return el('div', 'hud-dialogue',
-    `<div class="dlg-portrait" style="background:${color}"><span>${name[0]}</span></div>
-     <div class="dlg-body"><div class="dlg-name">${name}</div><div class="dlg-text">${text}</div></div>`);
+export function healthBars(health = 95, armour = 60) {
+  return el('div', 'hud-panel health-panel',
+    `<div class="bar-row"><span>HEALTH</span><b>${health}</b><div class="bar"><i class="hp" style="width:${health}%"></i></div></div>
+     <div class="bar-row"><span>ARMOUR</span><b>${armour}</b><div class="bar"><i class="ar" style="width:${armour}%"></i></div></div>
+     <div class="bar-row"><span>STAMINA</span><b>78</b><div class="bar"><i class="st" style="width:78%"></i></div></div>`);
 }
 
-function radioLine(stationIdx = 0) {
-  const r = RADIOS[stationIdx];
-  return el('div', 'hud-radio', `♪ ${r.name} — ${r.song}`);
+export function dialogueBox(kind) {
+  const d = DIALOGUE[kind];
+  const boxEl = el('div', 'hud-panel dialogue',
+    `<img class="dlg-face" src="" alt="">
+     <div class="dlg-body"><div class="dlg-name" style="color:${d.color}">${d.name}</div>
+     <div class="dlg-text">“${d.text}”</div></div>`);
+  return boxEl;
 }
 
-function floatingScore(text, cls, x, y) {
-  const f = el('div', `float-score ${cls}`, text);
-  f.style.left = x + '%'; f.style.top = y + '%';
-  return f;
+export function radioPanel(idx = 0) {
+  const r = RADIOS[idx];
+  return el('div', 'hud-panel radio-panel', `♪ <b>${r.name}</b> — ${r.track}`);
 }
 
-// ---- Shot 1: chase ----
-export function renderChaseHUD(root, shot) {
-  root.appendChild(missionPanel(shot));
-  root.appendChild(moneyBlock(shot));
-  root.appendChild(stormChip(shot));
-  root.appendChild(policePanel(POLICE_CHASE));
-  root.appendChild(disguiseTabs());
-  const mm = el('div', 'hud-minimap');
-  mm.appendChild(drawMinimap('chase'));
-  root.appendChild(mm);
-  root.appendChild(dialogue('SINTA', '#D94F70', '“Raka, belok kiri di Jembatan Merah! Heli ELANG-1 masih di atas kita — drift di tikungan, jangan rem!”'));
-  root.appendChild(radioLine(0));
-  const speed = el('div', 'hud-speed',
-    `<div class="speed-num">${shot.speed}</div><div class="speed-unit">KM/H</div>
-     <div class="speed-car">${shot.carName}</div>
-     <div class="cond-bar"><i style="width:${shot.condition}%"></i></div>
-     <div class="cond-label">CONDITION ${shot.condition}% · FUEL ${shot.fuel}% · [Q] SINTA: DRIFT BOOST</div>`);
-  root.appendChild(speed);
-  root.appendChild(floatingScore('DRIFT x3 <b>+Rp 150.000</b>', 'drift', 58, 30));
-  root.appendChild(floatingScore('NEAR MISS <b>+Rp 100.000</b>', 'nearmiss', 34, 52));
-  root.appendChild(el('div', 'hud-ability', 'Q — SINTA: DRIFT BOOST · READY'));
+export function speedPanel(kmh, carName, condition) {
+  return el('div', 'hud-panel speed-panel',
+    `<div class="speed">${kmh}</div><div class="speed-unit">KM/H</div>
+     <div class="car-name">${carName}</div>
+     <div class="car-cond">CONDITION <div class="bar"><i style="width:${condition}%"></i></div> ${condition}%</div>`);
 }
 
-// ---- Shot 2: combat ----
-export function renderCombatHUD(root, shot) {
-  root.appendChild(missionPanel(shot));
-  root.appendChild(moneyBlock(shot));
-  root.appendChild(stormChip(shot));
-  root.appendChild(policePanel(POLICE_COMBAT, 'MUSUH & POLISI'));
-  root.appendChild(weaponWheel('SMG'));
-  const bars = el('div', 'hud-vitals',
-    `<div class="vital-row"><span>HEALTH</span><div class="vital-bar health"><i style="width:${shot.health}%"></i></div><b>${shot.health}</b></div>
-     <div class="vital-row"><span>ARMOUR</span><div class="vital-bar armour"><i style="width:${shot.armour}%"></i></div><b>${shot.armour}</b></div>
-     <div class="vital-row"><span>STAMINA</span><div class="vital-bar stamina"><i style="width:74%"></i></div><b>74</b></div>`);
-  root.appendChild(bars);
-  const mm = el('div', 'hud-minimap');
-  mm.appendChild(drawMinimap('combat'));
-  root.appendChild(mm);
-  root.appendChild(dialogue('DET. ARYA', '#2A6BFF', '“Raka! Looter Geng Ombak sudah masuk Pasar Ikan. Tahan mereka sampai evakuasi rob selesai — jangan sampai ada warga yang kena!”'));
-  root.appendChild(radioLine(2));
-  const ammo = el('div', 'hud-ammo',
-    `<div class="ammo-big">${shot.ammo}<span>/${shot.ammoReserve}</span></div>
-     <div class="ammo-name">${shot.weapon} · [1-4] GANTI SENJATA</div>`);
-  root.appendChild(ammo);
-  root.appendChild(floatingScore('HEADSHOT <b>+Rp 75.000</b>', 'headshot', 56, 26));
-  root.appendChild(floatingScore('LOOTER DOWN <b>+Rp 250.000</b>', 'looter', 18, 56));
-  root.appendChild(el('div', 'hud-crosshair', '+'));
-  root.appendChild(el('div', 'hud-objective', '⚠ EVAKUASI ROB: 3 WARGA TERJEBAK DI PASAR — SELAMATKAN MEREKA'));
+export function floatingScore(text, cls = '') {
+  return el('div', `float-score ${cls}`, text);
 }
 
-// ---- Shot 3: title ----
-export function renderTitleHUD(root, shot) {
-  const t = el('div', 'title-screen');
-  t.innerHTML = `
-    <div class="title-left">
-      <div class="title-kicker">TANJUNG ARUN</div>
-      <h1 class="title-big">BADAI<br>ARUNIKA</h1>
-      <div class="title-sub">Kota pesisir · 7 hari menuju badai · 8 misi · 24 kerang</div>
-      <div class="title-menu">
-        <div class="menu-item active">▶ CONTINUE — Ch.${SAVE_SLOT.chapter} · ${formatRupiah(SAVE_SLOT.money)} · Day ${SAVE_SLOT.day} · ${SAVE_SLOT.completion}%</div>
-        <div class="menu-item">NEW GAME</div>
-        <div class="menu-item">CONTROLS</div>
-        <div class="menu-item">SETTINGS</div>
-      </div>
-      <div class="title-storm">🌀 LANDFALL IN ${shot.countdown} · CAT ${shot.cat} · ${shot.wind} KM/H · D6 18:00</div>
+export function ammoCounter(weaponName, ammo) {
+  return el('div', 'hud-panel ammo-counter', `<div class="ammo-big">${ammo}</div><div class="ammo-name">${weaponName}</div>`);
+}
+
+export function crosshair() {
+  return el('div', 'crosshair', '<i></i><i></i><i></i><i></i>');
+}
+
+// --- round minimap ---------------------------------------------------------
+
+export function drawMinimap(canvas, { player = { x: 0.5, y: 0.62 }, police = [], route = true } = {}) {
+  const g = canvas.getContext('2d');
+  const S = canvas.width, C = S / 2;
+  g.clearRect(0, 0, S, S);
+  g.save();
+  g.beginPath(); g.arc(C, C, C - 2, 0, Math.PI * 2); g.clip();
+  g.fillStyle = '#1A2433'; g.fillRect(0, 0, S, S);
+  // sea east
+  g.fillStyle = '#2FA8B5'; g.fillRect(S * 0.72, 0, S * 0.28, S);
+  g.fillStyle = '#E8D5A3'; g.fillRect(S * 0.66, 0, S * 0.06, S);
+  // district blocks
+  const cols = ['#B565D8', '#F2A541', '#2FA8B5', '#D94F70', '#3A9A5A'];
+  for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) {
+    g.fillStyle = cols[(i + j) % 5]; g.globalAlpha = 0.55;
+    g.fillRect(6 + i * 20, 6 + j * 20, 17, 17); g.globalAlpha = 1;
+  }
+  // roads
+  g.strokeStyle = '#F2F2F2'; g.lineWidth = 3;
+  for (let i = 0; i <= 5; i++) {
+    g.beginPath(); g.moveTo(6 + i * 20, 0); g.lineTo(6 + i * 20, S); g.stroke();
+    g.beginPath(); g.moveTo(0, 6 + i * 20); g.lineTo(S, 6 + i * 20); g.stroke();
+  }
+  // flood zone
+  g.fillStyle = 'rgba(74,122,106,0.75)';
+  g.fillRect(S * 0.1, S * 0.7, S * 0.4, S * 0.2);
+  g.fillStyle = '#FFFFFF'; g.font = 'bold 9px sans-serif'; g.fillText('BANJIR ROB', S * 0.12, S * 0.78);
+  // GPS route
+  if (route) {
+    g.strokeStyle = '#FF5C8A'; g.lineWidth = 4; g.setLineDash([]);
+    g.beginPath(); g.moveTo(S * player.x, S * player.y);
+    g.lineTo(S * 0.3, S * 0.3); g.lineTo(S * 0.62, S * 0.22); g.stroke();
+  }
+  // police dots
+  g.fillStyle = '#2A6BFF';
+  for (const p of police) { g.beginPath(); g.arc(S * p.x, S * p.y, 4, 0, Math.PI * 2); g.fill(); }
+  // player arrow
+  g.fillStyle = '#E8443A';
+  g.beginPath(); g.moveTo(S * player.x, S * player.y - 7); g.lineTo(S * player.x + 5, S * player.y + 5);
+  g.lineTo(S * player.x - 5, S * player.y + 5); g.closePath(); g.fill();
+  g.restore();
+  g.strokeStyle = '#2DD4BF'; g.lineWidth = 3;
+  g.beginPath(); g.arc(C, C, C - 2, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = '#FFFFFF'; g.font = 'bold 12px sans-serif'; g.textAlign = 'center';
+  g.fillText('N', C, 14);
+}
+
+// --- full 2D city map (shot 4) ---------------------------------------------
+
+export function drawMap(canvas, shot = 4) {
+  const s = SHOTS[shot];
+  const g = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  g.fillStyle = '#101827'; g.fillRect(0, 0, W, H);
+  // district zones: 3 cols x 3 rows (x: 30/260/470, y: 20/175/330)
+  const zones = [
+    { x: 30, y: 20, w: 220, h: 145, c: '#4A2A6B', name: 'KOTA TUA' },
+    { x: 260, y: 20, w: 200, h: 145, c: '#6B4A1F', name: 'PANTAI ARUNIKA' },
+    { x: 470, y: 20, w: 200, h: 145, c: '#1F4A4A', name: 'PELABUHAN' },
+    { x: 30, y: 175, w: 220, h: 145, c: '#5E1F30', name: 'PASAR SENJA' },
+    { x: 260, y: 175, w: 200, h: 145, c: '#1F3A6B', name: 'MARINA' },
+    { x: 470, y: 175, w: 200, h: 145, c: '#3A3A3A', name: 'BANDARA ARUN' },
+    { x: 30, y: 330, w: 220, h: 145, c: '#1F4A2A', name: 'PERBUKITAN' },
+    { x: 260, y: 330, w: 200, h: 145, c: '#6B5E2A', name: 'KAMPUNG NELAYAN' },
+  ];
+  for (const z of zones) {
+    g.fillStyle = z.c; g.fillRect(z.x, z.y, z.w, z.h);
+    g.strokeStyle = 'rgba(45,212,191,0.7)'; g.lineWidth = 2; g.strokeRect(z.x, z.y, z.w, z.h);
+    g.fillStyle = '#FFFFFF'; g.font = 'bold 13px sans-serif'; g.fillText(z.name, z.x + 12, z.y + 28);
+  }
+  // street grid
+  g.strokeStyle = 'rgba(242,242,242,0.85)'; g.lineWidth = 3;
+  for (let i = 0; i <= 6; i++) {
+    g.beginPath(); g.moveTo(40 + i * 105, 20); g.lineTo(40 + i * 105, 470); g.stroke();
+    g.beginPath(); g.moveTo(30, 30 + i * 72); g.lineTo(680, 30 + i * 72); g.stroke();
+  }
+  // street names in the gaps between zones (never over a district title)
+  g.fillStyle = '#FFD23F'; g.font = 'bold 10px sans-serif'; g.textAlign = 'left';
+  for (const [name, x] of [['JL. MERDEKA', 255], ['JL. PELABUHAN', 465]]) {
+    g.save(); g.translate(x, 460); g.rotate(-Math.PI / 2); g.fillText(name, 0, 0); g.restore();
+  }
+  g.fillText('JL. PASAR SENJA', 48, 168);
+  g.fillText('JL. MARINA', 48, 323);
+  // sea strip on the east edge + label
+  g.fillStyle = '#2FA8B5'; g.fillRect(690, 0, 70, H);
+  g.fillStyle = '#FFFFFF'; g.font = 'bold 15px sans-serif';
+  g.save(); g.translate(742, 240); g.rotate(Math.PI / 2); g.textAlign = 'center'; g.fillText('LAUT ARUNIKA', 0, 0); g.restore();
+  // flood zones growing per day — nested boxes, one label each at a
+  // different corner so no two labels ever overlap
+  const floods = [
+    { label: 'ROB · HARI 3', x: 300, y: 432, w: 110, h: 28, lx: 306, ly: 450 },
+    { label: 'BANJIR ROB · HARI 4', x: 395, y: 420, w: 140, h: 40, lx: 400, ly: 434 },
+    { label: 'BANJIR ROB · HARI 5', x: 480, y: 402, w: 190, h: 58, lx: 560, ly: 416 },
+  ];
+  for (const f of floods) {
+    g.fillStyle = 'rgba(74,122,106,0.8)'; g.fillRect(f.x, f.y, f.w, f.h);
+    g.strokeStyle = '#7FB5A5'; g.setLineDash([6, 4]); g.strokeRect(f.x, f.y, f.w, f.h); g.setLineDash([]);
+  }
+  // labels AFTER all boxes, so no label is covered by a later (larger) box
+  g.fillStyle = '#FFFFFF'; g.font = 'bold 10px sans-serif'; g.textAlign = 'left';
+  for (const f of floods) g.fillText(f.label, f.lx, f.ly);
+  // storm cone + eye track over the SEA strip (right edge), clear of districts
+  g.fillStyle = 'rgba(232,106,146,0.28)';
+  g.beginPath(); g.moveTo(725, 40); g.lineTo(760, 180); g.lineTo(695, 180); g.closePath(); g.fill();
+  g.strokeStyle = '#E86A92'; g.setLineDash([8, 6]); g.lineWidth = 2;
+  g.beginPath(); g.moveTo(725, 40); g.lineTo(720, 250); g.lineTo(730, 400); g.stroke(); g.setLineDash([]);
+  g.fillStyle = '#E86A92'; g.font = 'bold 10px sans-serif'; g.textAlign = 'left';
+  g.fillText('D6 · CAT 4', 694, 215);
+  g.fillStyle = '#FFFFFF';
+  g.fillText('LANDFALL', 694, 290); g.fillText('D6 18:00', 694, 303);
+  // GPS route: PERBUKITAN -> MARINA -> PELABUHAN (evacuation), land only
+  g.strokeStyle = '#FF5C8A'; g.lineWidth = 5; g.lineJoin = 'round'; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(140, 430); g.lineTo(300, 340); g.lineTo(420, 360); g.lineTo(620, 120); g.stroke();
+  g.fillStyle = '#FF5C8A'; g.beginPath(); g.arc(620, 120, 9, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#FFFFFF'; g.font = 'bold 12px sans-serif'; g.textAlign = 'left'; g.fillText('EVAKUASI', 540, 100);
+  // POI pins (land only, at zone centres)
+  g.font = '16px sans-serif'; g.textAlign = 'center';
+  const pins = [['🏠', 140, 92], ['🛍️', 360, 92], ['⚓', 620, 92], ['🔧', 140, 247], ['🏭', 570, 290], ['🏖️', 360, 402]];
+  for (const [icon, x, y] of pins) g.fillText(icon, x, y);
+  // player marker
+  g.fillStyle = '#E8443A'; g.beginPath(); g.arc(140, 430, 8, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#FFFFFF'; g.lineWidth = 2; g.stroke();
+  return zones;
+}
+
+// --- title screen (shot 3) ---------------------------------------------------
+
+export function titleScreen(shot = 3) {
+  const s = SHOTS[shot];
+  const root = el('div', 'title-screen');
+  const left = el('div', 'title-left');
+  left.innerHTML = `
+    <div class="game-title"><span>TANJUNG</span><span class="t2">ARUN</span></div>
+    <div class="game-sub">— BADAI ARUNIKA —</div>
+    <div class="title-menu">
+      <div class="menu-item active">▶ CONTINUE <span class="menu-detail">Ch.5 · ${fmtRp(s.money)} · Day ${s.day} · ${s.completion}%</span></div>
+      <div class="menu-item">NEW GAME</div>
+      <div class="menu-item">CONTROLS</div>
+      <div class="menu-item">SETTINGS</div>
     </div>
-    <div class="title-right">
-      <div class="panel save-panel"><div class="panel-title">SAVE SLOT 1</div>
-        <div class="save-line">Chapter ${SAVE_SLOT.chapter} · Story ${SAVE_SLOT.story} · ${formatRupiah(SAVE_SLOT.money)}</div>
-        <div class="save-line">Day ${SAVE_SLOT.day} · ${SAVE_SLOT.time} · ${SAVE_SLOT.completion}% complete</div>
-        <div class="save-line">Kerang ${SAVE_SLOT.shells} · Saved at ${SAVE_SLOT.savedAt}</div>
-        <div class="save-bar"><i style="width:${SAVE_SLOT.completion}%"></i></div></div>
-      <div class="panel how-panel"><div class="panel-title">HOW TO PLAY</div>
-        <div class="how-line">WASD — Jalan / Nyetir &nbsp;·&nbsp; E — Masuk mobil &nbsp;·&nbsp; F — Curi mobil</div>
-        <div class="how-line">SPACE — Rem tangan &nbsp;·&nbsp; Q — Ability kru &nbsp;·&nbsp; 1-4 — Ganti senjata</div>
-        <div class="how-line">M — Peta &nbsp;·&nbsp; R — Radio &nbsp;·&nbsp; ESC — Menu</div></div>
-      <div class="panel judge-panel"><div class="panel-title">FOR THE JUDGE — ISI GAME INI</div>
-        <div class="judge-line">🌊 BANJIR ROB membesar per hari + misi evakuasi · 🏁 BALAPAN LIAR (Race wins 2 · Best lap 1:12)</div>
-        <div class="judge-line">8 MISI CERITA + 4 DISASTER JOB · 24 KERANG · 12 DISTRIK + STANDING</div>
-        <div class="judge-line">6 UNIT POLISI + HELI ELANG-1 · 3 STASIUN RADIO · 5 KRU + PERK</div>
-        <div class="judge-line">GARASI + UPGRADE BER-HARGA · PENYAMARAN FACE/CAR/CLOTHES · SAVE SLOT</div></div>
-    </div>
-    <div class="title-crew">
-      ${CREW.map(c => `<div class="crew-card"><div class="crew-face" style="background:${c.color}">${c.name[0]}</div>
-        <div class="crew-text"><div class="crew-name">${c.name}${c.you ? ' — YOU' : ''} <span class="crew-role">${c.role}</span></div>
-        <div class="crew-perk">${c.perk}</div></div></div>`).join('')}
-    </div>
-    <div class="title-bottom">REP LV${shot.repLevel} ${shot.rep}/${shot.repMax} · MISI ${shot.missionsDone}/8 · ${formatRupiah(shot.money)} · DAY ${shot.day} · ${shot.time} · v3 LOW-POLY 3D</div>`;
-  root.appendChild(t);
-}
-
-// ---- Shot 4: map (2D canvas + side panels) ----
-export function renderMapHUD(root, shot, drawMap) {
-  const m = el('div', 'map-screen');
-  m.innerHTML = `
-    <div class="map-left">
-      <div class="map-head">PETA TANJUNG ARUN — DAY ${shot.day} · ${shot.time}</div>
-      <canvas id="citymap" width="640" height="520"></canvas>
-      <div class="map-legend">🟦 LAUT · 🟩 TAMAN · 🟨 JALAN · 🟥 FLOOD ZONE (ROB) · ◆ MISI · ★ SAFEHOUSE · ▲ POLISI</div>
-    </div>
-    <div class="map-right">
-      <div class="panel"><div class="panel-title">DISTRICT STANDING</div>
-        ${DISTRICTS.slice(0, 6).map(d => `<div class="dist-row"><span class="dist-dot" style="background:${d.color}"></span>
-          <span class="dist-name">${d.name}</span><span class="dist-seen">${d.seen}%</span>
-          <span class="dist-stand">${d.standing}</span><span class="dist-effect-inline">— ${d.effect}</span></div>`).join('')}
-      </div>
-      <div class="panel"><div class="panel-title">GARASI — DOCKSIDE CUSTOMS</div>
-        ${GARAGE.map(g => `<div class="gar-row"><span>${g.name}</span><span class="gar-desc">${g.desc}</span>
-          <span class="gar-price">${g.price}</span><span class="gar-own ${g.owned ? 'owned' : 'locked'}">${g.owned ? 'OWNED' : 'LOCKED'}</span></div>`).join('')}
-      </div>
-      <div class="panel"><div class="panel-title">CAREER STATS</div>
-        <div class="stat-grid">
-          <span>Cars stolen <b>${CAREER.carsStolen}</b></span><span>Cops lost <b>${CAREER.copsLost}</b></span>
-          <span>Near misses <b>${CAREER.nearMisses}</b></span><span>Drifts <b>${CAREER.drifts}</b></span>
-          <span>Shots ${CAREER.shots} · Hits ${CAREER.hits}</span><span>Race wins ${CAREER.raceWins} · Best lap ${CAREER.bestLap}</span>
-          <span>${CAREER.kmDriven} km driven</span><span>Play time ${CAREER.playTime}</span>
-        </div>
-        <div class="stat-line">MISI ${shot.missionsDone}/8 · KERANG ${shot.shells}/${shot.shellsTotal} · ${shot.completion}% COMPLETE · ${formatRupiah(shot.money)}</div>
-      </div>
-      <div class="panel"><div class="panel-title">MISI + DISASTER JOBS</div>
-        ${MISSIONS.slice(0, 5).map(x => `<div class="mis-row"><span class="mis-n">${x.n}</span><span>${x.name}</span><span class="mis-st ${x.status}">${x.status}</span></div>`).join('')}
-        ${DISASTER_JOBS.slice(0, 2).map(x => `<div class="mis-row"><span class="mis-n">◆</span><span>${x.name}</span><span class="mis-pay">${x.pay}</span></div>`).join('')}
-        <div class="mis-row"><span class="mis-n">…</span><span>+ 2 disaster jobs · 2 misi terkunci</span></div>
+    <div class="save-slots">
+      <div class="save-slot"><b>SAVE 1</b> · Story ${s.missionsDone}/8 · ${fmtRp(s.money)} · Rank ${s.repLevel} · Day ${s.day} · ${s.time}</div>
+      <div class="save-slot dim"><b>SAVE 2</b> · Story 2/8 · Rp 12.000.000 · Rank 2 · Day 2 · 17:40</div>
+      <div class="save-slot dim"><b>SAVE 3</b> · EMPTY</div>
+    </div>`;
+  const right = el('div', 'title-right');
+  right.innerHTML = `
+    <div class="hud-panel storm-panel big">${stormPanel(shot).innerHTML}</div>
+    <div class="hud-panel judge-box">
+      <div class="panel-title">UPDATED — FOR THE JUDGE</div>
+      <div class="judge-lines">
+        🌊 BANJIR ROB membesar per hari · misi evakuasi ber-angka<br>
+        🏁 BALAPAN LIAR: SUNSET SPRINT · Race wins 2 · Best lap 1:12<br>
+        📋 8 MISI STORY + 4 DISASTER JOBS · 24 SHELLS (${SHOTS[4].shells}/24)<br>
+        🚔 6 UNIT POLISI + HELI ELANG-1 · taktik + jarak meter<br>
+        📻 3 STASIUN RADIO · 5 KRU + PERK · GARASI + UPGRADE<br>
+        🎭 DISGUISE FACE/CAR/CLOTHES · RESPRAY clears wanted
       </div>
     </div>`;
-  root.appendChild(m);
-  const canvas = root.querySelector('#citymap');
-  if (canvas && drawMap) drawMap(canvas);
+  const crewStrip = el('div', 'crew-strip');
+  crewStrip.innerHTML = '<div class="panel-title">KRU · 5 + KAMU</div>' + CREW.map((c) => `
+    <div class="crew-card"><div class="crew-dot" style="background:${c.color}"></div>
+    <b>${c.name}</b><span>${c.role}</span><i>${c.perk}</i></div>`).join('');
+  root.append(left, right, crewStrip);
+  return root;
+}
+
+// --- map screen side panels (shot 4) -----------------------------------------
+
+export function mapSidePanels(shot = 4) {
+  const s = SHOTS[shot];
+  const wrap = el('div', 'map-panels');
+  const dist = el('div', 'hud-panel district-panel');
+  dist.innerHTML = '<div class="panel-title">DISTRICT STANDING</div>' + DISTRICTS.map((d) => `
+    <div class="dist-row"><span class="dist-dot" style="background:${d.color}"></span>
+    <b>${d.name}</b><span>${d.seen}% SEEN</span><span class="dist-stand">${d.standing}</span>
+    <i>${d.effect}</i></div>`).join('');
+  const stats = el('div', 'hud-panel career-panel');
+  stats.innerHTML = `<div class="panel-title">CAREER STATS · ${fmtRp(s.money)}</div>
+    <div class="stat-grid">
+      <span>Cars stolen</span><b>${CAREER.carsStolen}</b><span>Cops lost</span><b>${CAREER.copsLost}</b>
+      <span>Near misses</span><b>${CAREER.nearMisses}</b><span>Drifts</span><b>${CAREER.drifts}</b>
+      <span>Shots · Hits</span><b>${CAREER.shots} · ${CAREER.hits}</b><span>Play time</span><b>${CAREER.playTime}</b>
+      <span>Race wins</span><b>${CAREER.raceWins}</b><span>Best lap</span><b>${CAREER.bestLap}</b>
+      <span>km driven</span><b>${CAREER.kmDriven}</b><span>Shells</span><b>${s.shells}/${s.shellsTotal}</b>
+      <span>Missions</span><b>${s.missionsDone}/${s.missionsTotal} done</b><span>Completion</span><b>46%</b>
+    </div>
+    <div class="panel-title" style="margin-top:10px">GARASI · DOCKSIDE CUSTOMS</div>
+    ${GARAGE.map((gv) => `<div class="gar-row"><span>${gv.service}</span><i>${gv.note}</i><b>${gv.owned ? 'OWNED' : fmtRp(gv.price)}</b></div>`).join('')}`;
+  const missions = el('div', 'hud-panel mission-list');
+  missions.innerHTML = '<div class="panel-title">STORY · 8 MISI</div>' + MISSIONS.map((m) => `
+    <div class="mis-row ${m.status.toLowerCase()}"><span>${m.n}. ${m.name}</span><b>${m.status === 'DONE' ? '✓ DONE' : m.status}</b><i>${fmtRp(m.reward)}</i></div>`).join('')
+    + '<div class="panel-title" style="margin-top:8px">DISASTER JOBS</div>'
+    + DISASTER_JOBS.map((j) => `<div class="mis-row"><span>${j.name}</span><b>REPEATABLE</b><i>${fmtRp(j.pay)}</i></div>`).join('');
+  wrap.append(dist, stats, missions);
+  return wrap;
 }

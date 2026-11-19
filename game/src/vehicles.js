@@ -1,153 +1,121 @@
-// TANJUNG ARUN — BADAI ARUNIKA: vehicles. Low-poly cars, vans, taxi,
-// police cars with light bars, and the ELANG-1 police helicopter.
+// vehicles.js — low-poly cars (sedan, sport, pickup, taxi, police, van) and
+// the police helicopter with a CORRECT spotlight cone: narrow at the heli,
+// widening to the ground, plus a bright pool where it lands.
 import * as THREE from 'three';
-import { mat, emissiveMat } from './city.js';
+import { box, mat } from './world.js';
 
-function box(w, h, d, material, x = 0, y = 0, z = 0) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
-  m.position.set(x, y, z);
-  m.castShadow = true; m.receiveShadow = true;
-  return m;
-}
-
-function makeWheel(x, z) {
-  const w = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.25, 10), mat(0x1A1A1A));
-  w.rotation.z = Math.PI / 2;
-  w.position.set(x, 0.34, z);
-  w.castShadow = true;
-  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.26, 8), mat(0xC8C8C8));
-  hub.rotation.z = Math.PI / 2;
-  hub.position.set(x, 0.34, z);
-  const g = new THREE.Group();
-  g.add(w); g.add(hub);
+function wheel(x, z) {
+  const w = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.26, 10), mat(0x1a1a1a, { roughness: 0.9 }));
+  w.rotation.z = Math.PI / 2; w.position.set(x, 0.34, z); w.castShadow = true;
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.28, 8), mat(0xaaaaaa, { metalness: 0.6, roughness: 0.4 }));
+  hub.rotation.z = Math.PI / 2; hub.position.copy(w.position);
+  const g = new THREE.Group(); g.add(w); g.add(hub);
   return g;
 }
 
-function shade(hex, f) {
-  const r = Math.min(255, Math.round(((hex >> 16) & 255) * f));
-  const g = Math.min(255, Math.round(((hex >> 8) & 255) * f));
-  const b = Math.min(255, Math.round((hex & 255) * f));
-  return (r << 16) | (g << 8) | b;
-}
-
-// kind: 'sport' | 'sedan' | 'police' | 'taxi' | 'pickup' | 'van'
-export function makeCar(color, kind = 'sedan') {
-  const car = new THREE.Group();
-  const bodyMat = mat(color);
-  const isVan = kind === 'van';
-  const bodyLen = isVan ? 4.6 : 4.2;
-  const bodyH = isVan ? 1.6 : 0.55;
-  const bodyY = isVan ? 1.15 : 0.62;
-
-  const body = box(bodyLen, bodyH, 1.9, bodyMat, 0, bodyY, 0);
-  car.add(body);
-  if (!isVan) {
-    // Cabin in a darker shade of the body colour (two-tone read from behind)
-    // + dark windshield + rear window.
-    car.add(box(2.0, 0.5, 1.7, mat(shade(color, 0.55)), -0.2, 1.12, 0));
-    car.add(box(0.08, 0.42, 1.6, mat(0x141C26, { roughness: 0.2, metalness: 0.4 }), 0.82, 1.1, 0));
-    car.add(box(0.08, 0.42, 1.6, mat(0x141C26, { roughness: 0.2, metalness: 0.4 }), -1.22, 1.1, 0));
-  } else {
-    car.add(box(0.08, 0.9, 1.7, mat(0x141C26, { roughness: 0.2, metalness: 0.4 }), 2.28, 1.25, 0));
+export function makeCar(kind = 'sedan', color = 0xe8443a) {
+  const g = new THREE.Group();
+  const bodyColor = kind === 'police' ? 0xf2f2f2 : color;
+  const body = box(4.2, 0.55, 1.9, bodyColor, { roughness: 0.35, metalness: 0.35 });
+  body.position.y = 0.62; g.add(body);
+  if (kind !== 'convertible') {
+    const cabin = box(2.0, 0.5, 1.7, bodyColor, { roughness: 0.35, metalness: 0.3 });
+    cabin.position.set(-0.2, 1.12, 0); g.add(cabin);
+    const glass = box(1.9, 0.34, 1.72, 0x1a2a3a, { roughness: 0.15, metalness: 0.6 });
+    glass.position.set(-0.2, 1.14, 0); g.add(glass);
   }
-  // Wheels.
-  const wheels = [];
-  for (const [wx, wz] of [[1.35, 0.95], [1.35, -0.95], [-1.35, 0.95], [-1.35, -0.95]]) {
-    const w = makeWheel(wx, wz);
-    car.add(w); wheels.push(w);
+  // bumpers + grille
+  const bumperF = box(0.18, 0.22, 1.85, 0x222222); bumperF.position.set(2.12, 0.5, 0); g.add(bumperF);
+  const bumperR = bumperF.clone(); bumperR.position.x = -2.12; g.add(bumperR);
+  // wheels
+  for (const [x, z] of [[1.35, 0.95], [1.35, -0.95], [-1.35, 0.95], [-1.35, -0.95]]) g.add(wheel(x, z));
+  // headlights (emissive white) + taillights (emissive red)
+  for (const z of [-0.6, 0.6]) {
+    const hl = box(0.08, 0.16, 0.4, 0xffffff, { emissive: 0xffffff, emissiveIntensity: 2.2 });
+    hl.position.set(2.16, 0.68, z); g.add(hl);
+    const tl = box(0.08, 0.14, 0.4, 0xff2222, { emissive: 0xff2222, emissiveIntensity: 1.8 });
+    tl.position.set(-2.16, 0.68, z); g.add(tl);
   }
-  // Emissive headlights + taillights.
-  const headMat = emissiveMat(0xFFF2C0, 2.0);
-  const tailMat = emissiveMat(0xFF2A2A, 1.6);
-  car.add(box(0.08, 0.16, 0.3, headMat, bodyLen / 2 + 0.02, 0.62, 0.6));
-  car.add(box(0.08, 0.16, 0.3, headMat, bodyLen / 2 + 0.02, 0.62, -0.6));
-  car.add(box(0.08, 0.14, 0.3, tailMat, -bodyLen / 2 - 0.02, 0.62, 0.6));
-  car.add(box(0.08, 0.14, 0.3, tailMat, -bodyLen / 2 - 0.02, 0.62, -0.6));
-
-  if (kind === 'sport') {
-    // Thin rear spoiler + hood scoop.
-    car.add(box(0.5, 0.06, 1.7, mat(0x1A1A1A), -2.0, 1.05, 0));
-    car.add(box(0.5, 0.1, 0.8, mat(0x1A1A1A), 1.2, 0.95, 0));
+  if (kind === 'sport' || kind === 'player') {
+    const spoiler = box(0.5, 0.07, 1.7, 0x1a1a1a, { metalness: 0.4 });
+    spoiler.position.set(-1.95, 1.05, 0); g.add(spoiler);
+    const strutL = box(0.08, 0.25, 0.08, 0x1a1a1a); strutL.position.set(-1.95, 0.9, 0.6); g.add(strutL);
+    const strutR = strutL.clone(); strutR.position.z = -0.6; g.add(strutR);
   }
   if (kind === 'police') {
-    // White stripe + roof light bar (red left, blue right).
-    car.add(box(4.22, 0.1, 0.5, mat(0xF2F2F2), 0, 0.92, 0));
-    car.add(box(0.5, 0.14, 0.5, emissiveMat(0xFF2A2A, 2.4), -0.2, 1.45, 0.28));
-    car.add(box(0.5, 0.14, 0.5, emissiveMat(0x2A6BFF, 2.4), -0.2, 1.45, -0.28));
-    car.add(box(0.06, 0.5, 1.7, mat(0xF2F2F2), 0.4, 0.62, 0));
+    // white stripe + roof light bar (red + blue)
+    const stripe = box(4.24, 0.1, 0.5, 0x1a3a8a, { roughness: 0.5 });
+    stripe.position.set(0, 0.62, 0); g.add(stripe);
+    const barBase = box(0.9, 0.12, 1.0, 0x111111); barBase.position.set(-0.2, 1.45, 0); g.add(barBase);
+    const red = box(0.4, 0.18, 0.5, 0xff2a2a, { emissive: 0xff2a2a, emissiveIntensity: 2.5 });
+    red.position.set(-0.2, 1.58, 0.28); g.add(red);
+    const blue = box(0.4, 0.18, 0.5, 0x2a6bff, { emissive: 0x2a6bff, emissiveIntensity: 2.5 });
+    blue.position.set(-0.2, 1.58, -0.28); g.add(blue);
   }
   if (kind === 'taxi') {
-    car.add(box(0.6, 0.18, 0.5, mat(0x111111), -0.2, 1.45, 0));
-    const sign = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.5, 0.16),
-      new THREE.MeshBasicMaterial({ color: 0xFFD23F }),
-    );
-    sign.position.set(-0.2, 1.56, 0.26); sign.rotation.x = 0;
-    car.add(sign);
+    const sign = box(0.7, 0.22, 0.4, 0xffd23f, { emissive: 0xffd23f, emissiveIntensity: 0.9 });
+    sign.position.set(-0.2, 1.48, 0); g.add(sign);
+    const door = box(0.9, 0.4, 0.02, 0x1a1a1a); door.position.set(0.4, 0.62, 0.96); g.add(door);
   }
   if (kind === 'pickup') {
-    car.add(box(1.4, 0.5, 1.7, mat(0x222222), -1.3, 1.05, 0));
+    const bed = box(1.7, 0.35, 1.8, 0x2a2a2a, { roughness: 0.8 });
+    bed.position.set(-1.15, 0.95, 0); g.add(bed);
   }
-  car.userData.wheels = wheels;
-  return car;
+  if (kind === 'van') {
+    const cargo = box(3.4, 1.5, 1.95, color, { roughness: 0.5, metalness: 0.2 });
+    cargo.position.set(-0.3, 1.35, 0); g.add(cargo);
+    const win = box(0.1, 0.5, 1.6, 0x1a2a3a, { roughness: 0.15, metalness: 0.6 });
+    win.position.set(1.45, 1.35, 0); g.add(win);
+  }
+  return g;
 }
 
-export function makePlayerCar() {
-  return makeCar(0xE8443A, 'sport');
-}
-export function makePoliceCar() {
-  return makeCar(0xF2F2F2, 'police');
-}
-export function makeTaxi() {
-  return makeCar(0xFFD23F, 'taxi');
-}
-
-// ELANG-1: police helicopter with spinning rotor + spotlight cone.
-export function makeHeli() {
-  const heli = new THREE.Group();
-  const body = box(3.4, 1.1, 1.4, mat(0x2A4A6B), 0, 0, 0);
-  heli.add(body);
-  heli.add(box(1.2, 0.8, 1.1, mat(0x141C26, { roughness: 0.2 }), 1.9, -0.1, 0));
-  heli.add(box(2.6, 0.5, 0.5, mat(0x2A4A6B), -2.6, 0.2, 0));
-  heli.add(box(0.1, 1.2, 0.9, mat(0x2A4A6B), -3.8, 0.5, 0));
-  // Rotor: two long thin boxes, spun by the animator.
-  const rotor = new THREE.Group();
-  rotor.add(box(7.5, 0.06, 0.35, mat(0x1A1A1A), 0, 0, 0));
-  rotor.add(box(0.35, 0.06, 7.5, mat(0x1A1A1A), 0, 0, 0));
-  rotor.position.y = 0.75;
-  heli.add(rotor);
-  // Tail rotor.
-  const tailRotor = new THREE.Group();
-  tailRotor.add(box(0.06, 1.6, 0.2, mat(0x1A1A1A), 0, 0, 0));
-  tailRotor.position.set(-3.85, 0.5, 0.35);
-  heli.add(tailRotor);
-  // Skids.
-  heli.add(box(2.6, 0.08, 0.12, mat(0x1A1A1A), 0, -0.85, 0.55));
-  heli.add(box(2.6, 0.08, 0.12, mat(0x1A1A1A), 0, -0.85, -0.55));
-  // Spotlight cone, additive transparent, aimed at the road below.
+export function makeHelicopter(coneH = 16) {
+  const g = new THREE.Group();
+  const body = box(3.4, 1.3, 1.6, 0x2a3a4a, { roughness: 0.5, metalness: 0.3 });
+  body.position.y = 0; g.add(body);
+  const nose = box(1.0, 1.0, 1.4, 0x1a2a3a, { roughness: 0.15, metalness: 0.6 });
+  nose.position.set(1.9, -0.05, 0); g.add(nose);
+  const tail = box(3.2, 0.35, 0.35, 0x2a3a4a); tail.position.set(-3.0, 0.35, 0); g.add(tail);
+  const fin = box(0.15, 1.1, 0.9, 0xe8443a); fin.position.set(-4.5, 0.7, 0); g.add(fin);
+  const rotor = new THREE.Group(); rotor.position.y = 0.85;
+  for (const ry of [0, Math.PI / 2]) {
+    const blade = box(7.2, 0.06, 0.28, 0x1a1a1a); blade.rotation.y = ry; rotor.add(blade);
+  }
+  g.add(rotor);
+  const tailRotor = box(0.06, 1.6, 0.2, 0x1a1a1a); tailRotor.position.set(-4.4, 0.4, 0.3); g.add(tailRotor);
+  for (const z of [-0.6, 0.6]) {
+    const skid = box(2.6, 0.08, 0.1, 0x333333); skid.position.set(0.3, -0.95, z); g.add(skid);
+  }
+  // searchlight on the belly
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8),
+    new THREE.MeshStandardMaterial({ color: 0xffe9a8, emissive: 0xffe9a8, emissiveIntensity: 3 }));
+  lamp.position.set(0.8, -0.7, 0); g.add(lamp);
+  // CORRECT spotlight cone: apex (small end) at the helicopter, widening
+  // down to the ground. ConeGeometry's apex is at +height/2.
   const cone = new THREE.Mesh(
-    new THREE.ConeGeometry(4.5, 16, 20, 1, true),
-    new THREE.MeshBasicMaterial({
-      color: 0xFFE9A8, transparent: true, opacity: 0.10,
-      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
-    }),
-  );
-  cone.rotation.x = Math.PI; // apex up at the heli
-  cone.position.y = -8.5;
-  heli.add(cone);
-  const spot = new THREE.Mesh(
-    new THREE.CircleGeometry(4.2, 20),
-    new THREE.MeshBasicMaterial({ color: 0xFFE9A8, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false }),
-  );
-  spot.rotation.x = -Math.PI / 2;
-  spot.position.y = -16.4;
-  heli.add(spot);
-  // Red beacon.
-  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), emissiveMat(0xFF2A2A, 3));
-  beacon.position.set(0, 0.65, 0);
-  heli.add(beacon);
-  heli.userData.rotor = rotor;
-  heli.userData.tailRotor = tailRotor;
-  heli.userData.beacon = beacon;
-  return heli;
+    new THREE.ConeGeometry(4.2 * (coneH / 16), coneH, 20, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+  cone.position.set(0.8, -0.7 - coneH / 2, 0);
+  g.add(cone);
+  g.userData.rotor = rotor;
+  g.userData.cone = cone;
+  return g;
+}
+
+// Bright elliptical pool of light on the ground where the spotlight lands.
+export function makeLightPool(x, z, rx = 4.2, rz = 5.2) {
+  const pool = new THREE.Mesh(new THREE.CircleGeometry(1, 24),
+    new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.5, depthWrite: false }));
+  pool.rotation.x = -Math.PI / 2; pool.scale.set(rx, rz, 1);
+  pool.position.set(x, 0.06, z);
+  return pool;
+}
+
+// Traffic car with a simple straight-line driver (used in play mode).
+export function makeTrafficCar(kind, color) {
+  const car = makeCar(kind, color);
+  car.userData.speed = 6 + Math.random() * 5;
+  car.userData.lane = (Math.random() - 0.5) * 4;
+  return car;
 }
