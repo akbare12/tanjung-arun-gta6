@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>TANJUNG ARUN — BADAI ARUNIKA</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; padding: 0; width: 1280px; height: 720px; overflow: hidden; background: #6B4A8F; }
+  #app { position: fixed; inset: 0; }
+  canvas { display: block; }
+  .hud { position: fixed; z-index: 5; font-family: Arial, Helvetica, sans-serif; color: #fff;
+    text-shadow: 0 2px 4px rgba(0,0,0,.75), 0 0 2px rgba(0,0,0,.9); pointer-events: none; }
+  .panel { background: rgba(10,14,28,.55); border: 2px solid rgba(255,255,255,.25); border-radius: 10px; padding: 10px 14px; }
+  #hud-tl { top: 16px; left: 16px; }
+  #hud-tl .day { font-size: 30px; font-weight: 900; letter-spacing: 1px; }
+  #hud-tl .storm { font-size: 19px; font-weight: 800; color: #FFD27A; margin-top: 2px; }
+  #hud-tl .cat { display: inline-block; margin-top: 6px; font-size: 16px; font-weight: 900;
+    background: #E8443A; border-radius: 6px; padding: 3px 10px; }
+  #hud-tr { top: 16px; right: 16px; text-align: right; }
+  #hud-tr .score { font-size: 30px; font-weight: 900; color: #FFD27A; }
+  #hud-tr .money { font-size: 21px; font-weight: 800; margin-top: 2px; }
+  #hud-bl { bottom: 16px; left: 16px; }
+  #hud-bl .lv { font-size: 22px; font-weight: 900; }
+  .bar { width: 220px; height: 12px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.5);
+    border-radius: 6px; margin-top: 5px; overflow: hidden; }
+  .bar > div { height: 100%; background: #37C978; }
+  #hud-bl .xp { font-size: 14px; font-weight: 700; margin-top: 4px; color: #D8F5E3; }
+  #hud-br { bottom: 16px; right: 16px; text-align: right; }
+  #hud-br .misi { font-size: 21px; font-weight: 900; }
+  #hud-br .kolek { font-size: 16px; font-weight: 700; margin-top: 3px; color: #D8F5E3; }
+  #hud-br .done { font-size: 26px; font-weight: 900; color: #7FE3FF; margin-top: 2px; }
+  #hud-combat { bottom: 16px; left: 50%; transform: translateX(-50%); width: 420px; }
+  #hud-combat .row { display: flex; justify-content: space-between; font-size: 19px; font-weight: 900; }
+  #hud-combat .hpbar, #hud-combat .ambar { height: 12px; border-radius: 6px; margin-top: 5px; overflow: hidden;
+    background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.5); }
+  #hud-combat .hpbar > div { height: 100%; background: #E8443A; }
+  #hud-combat .ambar > div { height: 100%; background: #3FA7FF; }
+  #hud-combat .wpn { text-align: center; font-size: 21px; font-weight: 900; margin-top: 7px; color: #FFD27A; }
+  .popup { position: fixed; z-index: 6; font-family: Arial, Helvetica, sans-serif; font-weight: 900;
+    color: #FFD27A; text-shadow: 0 2px 0 #7A2E00, 0 3px 8px rgba(0,0,0,.8); pointer-events: none; }
+  .popup small { display: block; font-size: 15px; color: #fff; letter-spacing: 2px; }
+  #title-ov { position: fixed; inset: 0; z-index: 7; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; font-family: Arial, Helvetica, sans-serif; pointer-events: none; }
+  #title-ov .kicker { font-size: 20px; font-weight: 800; letter-spacing: 8px; color: #FFD27A;
+    text-shadow: 0 2px 6px rgba(0,0,0,.8); }
+  #title-ov h1 { margin: 8px 0 0; font-size: 64px; font-weight: 900; color: #fff; letter-spacing: 2px;
+    text-shadow: 0 4px 0 #5B2A72, 0 8px 24px rgba(0,0,0,.7); }
+  #title-ov .sub { margin-top: 6px; font-size: 24px; font-weight: 800; color: #FFE9C9;
+    text-shadow: 0 2px 6px rgba(0,0,0,.8); }
+  #title-ov .save { margin-top: 26px; background: rgba(10,14,28,.62); border: 2px solid rgba(255,210,122,.7);
+    border-radius: 12px; padding: 14px 22px; color: #fff; font-size: 18px; font-weight: 700; line-height: 1.55;
+    text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+  #title-ov .save b { color: #FFD27A; }
+  #title-ov .press { margin-top: 22px; font-size: 17px; font-weight: 800; letter-spacing: 3px; color: #fff;
+    text-shadow: 0 2px 6px rgba(0,0,0,.9); }
+  #map-ov { position: fixed; inset: 0; z-index: 7; font-family: Arial, Helvetica, sans-serif; pointer-events: none; }
+  #map-ov .maptitle { position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    font-size: 26px; font-weight: 900; letter-spacing: 3px; color: #fff;
+    text-shadow: 0 2px 6px rgba(0,0,0,.85); }
+  #map-ov .mapbox { position: fixed; top: 60px; left: 16px; width: 250px; background: rgba(10,14,28,.62);
+    border: 2px solid rgba(255,255,255,.3); border-radius: 10px; padding: 12px 14px; color: #fff;
+    font-size: 15px; font-weight: 700; line-height: 1.7; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+  #map-ov .mapbox .hd { font-size: 17px; font-weight: 900; color: #FFD27A; letter-spacing: 1px; }
+  #map-ov .legend { position: fixed; bottom: 16px; left: 16px; background: rgba(10,14,28,.62);
+    border: 2px solid rgba(255,255,255,.3); border-radius: 10px; padding: 10px 14px; color: #fff;
+    font-size: 15px; font-weight: 700; line-height: 1.7; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+  #map-ov .dist { position: fixed; font-size: 15px; font-weight: 900; color: #fff; letter-spacing: 1px;
+    background: rgba(10,14,28,.55); border: 1px solid rgba(255,255,255,.4); border-radius: 6px;
+    padding: 3px 8px; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
+  #map-ov .floodtag { position: fixed; font-size: 15px; font-weight: 900; color: #BFEFFF; letter-spacing: 1px;
+    background: rgba(20,90,120,.65); border: 1px solid #7FE3FF; border-radius: 6px; padding: 3px 8px;
+    text-shadow: 0 1px 3px rgba(0,0,0,.9); }
+  #err { position: fixed; left: 0; top: 0; z-index: 99; color: #f66; font: 14px monospace; background: #000; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="err"></div>
+<div class="hud panel" id="hud-tl"></div>
+<div class="hud panel" id="hud-tr"></div>
+<div class="hud panel" id="hud-bl"></div>
+<div class="hud panel" id="hud-br"></div>
+<div class="hud panel" id="hud-combat" style="display:none"></div>
+<div id="popups"></div>
+<div id="title-ov" style="display:none"></div>
+<div id="map-ov" style="display:none"></div>
+<script src="vendor/three.min.js"></script>
+<script src="src/rng.js"></script>
+<script src="src/textures.js"></script>
+<script src="src/city.js"></script>
+<script src="src/vehicles.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>

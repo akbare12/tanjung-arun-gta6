@@ -1,64 +1,67 @@
 # TANJUNG ARUN — BADAI ARUNIKA
 
-[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![rank](https://make.fun/badge/gta6-01/akbare12/tanjung-arun-gta6/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![reward](https://make.fun/badge/gta6-01/akbare12/tanjung-arun-gta6/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![bounty gta6-01](https://img.shields.io/badge/bounty-gta6--01-E86A92)](https://make.fun)
+[![license MIT](https://img.shields.io/badge/license-MIT-37C978)](./LICENSE)
+[![offline static](https://img.shields.io/badge/offline-static-2FA8B5)](./index.html)
 
-A 3D low-poly open-world crime game in the spirit of GTA 6 — built for the
-[make.fun gta6-01 bounty](https://make.fun/bounty/gta6-01). All-original:
-its own coastal Indonesian city, characters, vehicles, names and story.
-Nothing from Rockstar Games.
+Game open-world crime 3D low-poly di kota pesisir Indonesia. Badai Arunika datang
+dalam 7 hari — sementara itu, kejar-kejaran dengan polisi, kumpulkan uang, dan
+bertahan dari **banjir rob** yang menggenang masuk ke jalan-jalan kota.
 
-## The game
+> Referral: **v7znzvhb**
 
-**Tanjung Arun** is a coastal city with seven days to live. Hurricane
-Arunika is coming — landfall Day 6 · 18:00 — and every day the wind rises,
-the rain gets heavier, and the tidal flood (**banjir rob**) swallows more
-of the streets. You are Raka, a wheelman caught between Det. Arya's police
-and a crew of five trying to get out before the storm hits.
+## Cara main
 
-- **Drive and walk** a full 3D city: palm-lined coastal boulevard, night
-  market, docks, marina, hills — on foot and by car, with traffic and
-  pedestrians.
-- **Wanted system**: six named police units (plus heli ELANG-1) with
-  tactics and distances in metres; disguise tabs (FACE / CAR / CLOTHES)
-  and respray to clear your heat.
-- **Combat**: health + armour, a 4-slot weapon wheel with ammo, floating
-  action scores (DRIFT x3, NEAR MISS, HEADSHOT, LOOTER DOWN).
-- **8 story missions + 4 repeatable disaster jobs** (evacuate the flood
-  zones, hunt looters, chase the storm), a street race, a crew of five
-  with perks and active abilities (Q: SINTA — DRIFT BOOST).
-- **Progression**: money, REP ranks (RUNNER → WHEELMAN → ENFORCER),
-  district standing with gameplay effects, a garage with priced upgrades,
-  save slots, career stats, 24 collectible shells.
-- **HUD**: mission tracker, storm countdown, round minimap with GPS
-  route, radio (3 stations), named-character dialogue, big speedometer.
+Buka `index.html` di browser (tanpa server, tanpa internet — Three.js sudah
+di-vendor di `vendor/three.min.js`). Mode interaktif jalan otomatis; tambahkan
+`?shot=chase|combat|title|map` di URL untuk melihat 4 adegan kunci yang sudah
+difoto di `screenshots/`.
 
-## Run it
+- **Chase** — Polisi mengejar mobil merahmu dari belakang, helikopter menyorot
+  dari atas, banjir rob di depan.
+- **Combat** — Baku tembak di persimpangan yang tergenang. HUD lengkap:
+  Health, Armour, senjata, dan amunisi.
+- **Title** — Layar judul + ringkasan save.
+- **Map** — Peta kota: distrik, rute, dan zona banjir rob.
 
-```sh
-python3 -m http.server 8000 --directory game
+## Kontrol
+
+| Tombol | Aksi |
+| ------ | ---- |
+| `W A S D` / panah | Kemudi mobil |
+| `Spasi` | Rem tangan / drift |
+| `Shift` | Nitro |
+| `E` | Ganti disguise (turunkan heat) |
+| `F` | Masuk / keluar mobil |
+| `Klik kiri` | Tembak (mode jalan kaki) |
+| `R` | Isi ulang senjata |
+| `M` | Peta |
+| `Esc` | Jeda |
+
+## Sistem
+
+- **Hitung mundur badai 7 hari** — kategori badai naik tiap hari (CAT 2 → CAT 4),
+  banjir rob makin luas.
+- **Disguise / Heat** — ganti penampilan untuk menurunkan level buronan polisi.
+- **Skor aksi melayang** — drift, kejar-kejaran, dan tembakan tepat memberi
+  skor yang melayang di layar.
+- **Misi & koleksi** — 8 misi utama, 24 koleksi tersebar di kota.
+
+## Struktur
+
+```
+index.html            entry point (HUD DOM + canvas)
+vendor/three.min.js   Three.js r160 (offline)
+src/rng.js            RNG deterministik (mulberry32)
+src/textures.js       tekstur kanvas: fasad hidup, jalan, papan nama
+src/city.js           kota: gedung, pohon, lampu, banjir rob
+src/vehicles.js       mobil, mobil polisi, helikopter, pejalan kaki
+src/main.js           scene, kamera per shot, HUD
+shots/render.mjs      render 4 screenshot via CDP (headless Chrome)
+screenshots/          1-chase.jpg, 2-combat.jpg, 3-title.jpg, 4-map.jpg
+dossier.json          daftar file + sha256 (deterministik)
 ```
 
-Then open http://localhost:8000 — no build step, no network, everything
-is vendored under `game/` (Three.js as `game/vendor/three.min.js`).
+## Lisensi
 
-## Controls
-
-- **WASD** drive / walk · **E** enter or exit the car · **SPACE** shoot
-- **Q** Drift Boost (Sinta) · **R** change radio · **M** city map
-- **1–4** switch weapon · **ESC** menu
-
-## Screenshots
-
-`1-chase` — police chase on the boulevard · `2-combat` — on-foot fight at
-the docks · `3-title` — title screen over the storm skyline · `4-map` —
-the full city map with flood zones and garage prices.
-
-## Referral
-
-Play more make.fun bounties: https://make.fun/?ref=v7znzvhb
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+MIT — lihat [LICENSE](./LICENSE).

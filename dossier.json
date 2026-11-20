@@ -1,0 +1,83 @@
+{
+  "entry": "gta6-01 v5 — TANJUNG ARUN: BADAI ARUNIKA",
+  "note": "dossier.json lists every repo file except itself (self-hash impossible) and .git.",
+  "file_count": 15,
+  "total_bytes": 1165271,
+  "files": [
+    {
+      "path": "dossier.mjs",
+      "sha256": "c09d9878e10195b7f11200b0b83b5210705b420e29be0b53ec017908e9707f5b",
+      "size_bytes": 1534
+    },
+    {
+      "path": "index.html",
+      "sha256": "0a15a76eb647a8ba8f77b1640b141de35fff30be713cca50c821f3c245f8d1c1",
+      "size_bytes": 6254
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "f3906a73ee00de2b1d5ae37ef1fbdb983e89418d94f5e720981d5fc194d605f2",
+      "size_bytes": 1069
+    },
+    {
+      "path": "README.md",
+      "sha256": "e7d1646ca60b0106df9da47d7f37a74523d3492250c4a1a57c451cdb4f4cb565",
+      "size_bytes": 2529
+    },
+    {
+      "path": "screenshots/1-chase.jpg",
+      "sha256": "7aa87feddb3355706b0d70e4aca55bd6776ab2857802aed89ab209a161f9a8ff",
+      "size_bytes": 106937
+    },
+    {
+      "path": "screenshots/2-combat.jpg",
+      "sha256": "0f31170f7cc599af1ec990e0c0eb34f1e6e91a08ff6bd557dcd090c3ee8d7f02",
+      "size_bytes": 123981
+    },
+    {
+      "path": "screenshots/3-title.jpg",
+      "sha256": "789732442f6c0eb07a452c9788b38653feec27645290d50c4985f37096a89440",
+      "size_bytes": 115832
+    },
+    {
+      "path": "screenshots/4-map.jpg",
+      "sha256": "3bc61500a9e16da21f74e49753bf61842b24afb0250d75ff5d0ea1dc12d736f3",
+      "size_bytes": 99531
+    },
+    {
+      "path": "shots/render.mjs",
+      "sha256": "289905cad6181f257584d672f099dc1e52272c63272ead7da03c9fb88b17553d",
+      "size_bytes": 2366
+    },
+    {
+      "path": "src/city.js",
+      "sha256": "45163fcdbe40af84730c7a4ab27cc81fb5ebaaefdd2c41bf24426affbddc2857",
+      "size_bytes": 11548
+    },
+    {
+      "path": "src/main.js",
+      "sha256": "26dbf71fdfaacefd21015b2ab26e5f1d14eb13611764feb33e89add6eee3fe95",
+      "size_bytes": 11182
+    },
+    {
+      "path": "src/rng.js",
+      "sha256": "05702d8719f486021f822961bfc79bd557359bc4c111fa1a80020d538b1f4e76",
+      "size_bytes": 586
+    },
+    {
+      "path": "src/textures.js",
+      "sha256": "236a50e447850873da83847824b0a4eaef75177b33130e2364b229a0ad31d315",
+      "size_bytes": 3946
+    },
+    {
+      "path": "src/vehicles.js",
+      "sha256": "29a5198b569b41e9be884159ad197167707571c33d6c15e3a7e6e4bb3837915b",
+      "size_bytes": 8092
+    },
+    {
+      "path": "vendor/three.min.js",
+      "sha256": "170c6789f43217c96b3170f4b42fafe135de7f7cd48497a4218f9757ee1d49fa",
+      "size_bytes": 669884
+    }
+  ]
+}
