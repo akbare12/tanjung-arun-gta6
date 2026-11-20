@@ -1,584 +1,528 @@
-/* TANJUNG ARUN — world builder. Deterministic: one seeded RNG drives every
-   placement, colour and texture, so every render of the same shot is identical.
-   No network, no clock, no Math.random in the scene. */
+// TANJUNG ARUN — BADAI ARUNIKA v7 · world.js
+// Low-poly kota pesisir Indonesia. Semua geometri dibuat fresh di sesi ini.
 (function () {
-'use strict';
+  'use strict';
+  function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  var rng = mulberry32(20261120);
+  function R(a, b) { return a + rng() * (b - a); }
+  function pick(arr) { return arr[Math.floor(rng() * arr.length)]; }
 
-function mulberry32(a) {
-  return function () {
-    a |= 0; a = a + 0x6D2B79F5 | 0;
-    var t = Math.imul(a ^ a >>> 15, 1 | a);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-var rng = mulberry32(20261120);
-function rr(a, b) { return a + rng() * (b - a); }
-function ri(a, b) { return Math.floor(rr(a, b + 1)); }
-function pick(arr) { return arr[Math.floor(rng() * arr.length)]; }
-
-var STREETS = [-120, -80, -40, 0, 40, 80, 120];
-var SHOP_NAMES = ['KEDAI BAKSO', 'TOKO BANGUNAN', 'APOTEK', 'WARUNG KOPI',
-  'TOKO KELONTONG', 'BENGKEL ARUN', 'TOKO IKAN', 'WARUNG NASI', 'TOKO BAJU',
-  'AYAM GORENG', 'FOTOKOPI', 'ES KELAPA', 'TOKO EMAS', 'WARUNG SOTO'];
-var SHOP_BG = ['#C0392B', '#1F618D', '#117A65', '#7D3C98', '#B9770E', '#2E4053'];
-var BUILDING_COLORS = ['#E8C9A0', '#D9A066', '#C97B5A', '#A8B8A0', '#E0D5C1',
-  '#C9A227', '#B56576', '#7A9E9F', '#E8B4B8', '#9B7EDE', '#D7B98A', '#F2E3C6'];
-var TREE_GREENS = [0x3E7A3A, 0x4C8A3F, 0x2F6B33, 0x5A9A45, 0x6FA050];
-var CAR_COLORS = [0xE8443A, 0x2E86C1, 0xF1C40F, 0xECF0F1, 0x1C2833, 0x7D3C98,
-  0xE67E22, 0x16A085, 0xBDC3C7, 0xC0392B];
-
-function makeCanvas(w, h, fn) {
-  var cv = document.createElement('canvas');
-  cv.width = w; cv.height = h;
-  fn(cv.getContext('2d'), w, h);
-  return cv;
-}
-
-/* Facade texture: lit windows, door, sign band — one texture per building type,
-   so a building is a single mesh but reads as a lived-in shophouse. */
-function facadeTexture(base, shopName, signBg) {
-  var cv = makeCanvas(128, 256, function (ctx, w, h) {
-    ctx.fillStyle = base; ctx.fillRect(0, 0, w, h);
-    var grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, 'rgba(255,255,255,0.14)');
-    grad.addColorStop(0.5, 'rgba(0,0,0,0)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.28)');
-    ctx.fillStyle = grad; ctx.fillRect(0, 0, w, h);
-    var y0 = shopName ? 34 : 10;
-    for (var r = 0; r < 6; r++) {
-      for (var c = 0; c < 4; c++) {
-        var x = 8 + c * 30, y = y0 + r * 34;
-        var lit = rng() < 0.55;
-        ctx.fillStyle = lit ? (rng() < 0.5 ? '#FFD98A' : '#FFE9B8') : '#232833';
-        ctx.fillRect(x, y, 20, 24);
-        ctx.fillStyle = 'rgba(255,255,255,0.25)';
-        ctx.fillRect(x, y, 20, 3);
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        ctx.fillRect(x + 9, y, 2, 24);
-      }
-    }
-    ctx.fillStyle = '#3B2F2F'; ctx.fillRect(52, h - 34, 24, 34); // door
-    ctx.fillStyle = '#FFD23F'; ctx.fillRect(52, h - 38, 24, 4);
-    if (shopName) {
-      ctx.fillStyle = signBg; ctx.fillRect(0, 0, w, 30);
-      ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 13px Arial';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(shopName, w / 2, 16, w - 6);
-    }
-  });
-  var tex = new THREE.CanvasTexture(cv);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-/* Big readable text texture for hero blade signs and ship names. */
-function textTexture(text, bg, fg, fontPx) {
-  var cv = makeCanvas(512, 128, function (ctx, w, h) {
-    ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 6;
-    ctx.strokeRect(4, 4, w - 8, h - 8);
-    ctx.fillStyle = fg; ctx.font = 'bold ' + fontPx + 'px Arial';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(text, w / 2, h / 2 + 2, w - 24);
-  });
-  var tex = new THREE.CanvasTexture(cv);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-function skyTexture() {
-  var cv = makeCanvas(1024, 512, function (ctx, w, h) {
-    var g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0.00, '#6B4A8F');
-    g.addColorStop(0.42, '#9A5A9E');
-    g.addColorStop(0.62, '#E86A92');
-    g.addColorStop(0.78, '#FFB36B');
-    g.addColorStop(0.88, '#FFD9A0');
-    g.addColorStop(1.00, '#5A3A55');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-    var sun = ctx.createRadialGradient(w * 0.72, h * 0.74, 4, w * 0.72, h * 0.74, 120);
-    sun.addColorStop(0, 'rgba(255,246,200,1)');
-    sun.addColorStop(0.25, 'rgba(255,214,140,0.9)');
-    sun.addColorStop(1, 'rgba(255,180,90,0)');
-    ctx.fillStyle = sun; ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = '#FFF3C4';
-    ctx.beginPath(); ctx.arc(w * 0.72, h * 0.74, 26, 0, Math.PI * 2); ctx.fill();
-  });
-  var tex = new THREE.CanvasTexture(cv);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-function roadTexture() {
-  var cv = makeCanvas(64, 256, function (ctx, w, h) {
-    ctx.fillStyle = '#23262B'; ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = 'rgba(255,255,255,0.05)';
-    for (var i = 0; i < 200; i++) ctx.fillRect(rng() * w, rng() * h, 2, 2);
-    ctx.fillStyle = '#F5F5F0';
-    ctx.fillRect(w / 2 - 2, 20, 4, 60);   // centre dash, aligned with the road
-    ctx.fillRect(w / 2 - 2, 148, 4, 60);
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.fillRect(3, 0, 2, h); ctx.fillRect(w - 5, 0, 2, h); // edge lines
-  });
-  var tex = new THREE.CanvasTexture(cv);
-  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-function lam(color, opts) {
-  var o = { color: color };
-  if (opts) for (var k in opts) o[k] = opts[k];
-  return new THREE.MeshLambertMaterial(o);
-}
-function box(w, h, d, mat, x, y, z, parent) {
-  var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-  m.position.set(x, y, z);
-  parent.add(m);
-  return m;
-}
-
-function makeTree(parent) {
-  var g = new THREE.Group();
-  var trunkH = rr(3.5, 6);
-  var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, trunkH, 6),
-    lam(0x6B4A2F));
-  trunk.position.y = trunkH / 2; g.add(trunk);
-  var green = pick(TREE_GREENS);
-  var n = ri(3, 4);
-  for (var i = 0; i < n; i++) {
-    var s = new THREE.Mesh(new THREE.SphereGeometry(rr(1.3, 2.1), 8, 6), lam(green));
-    s.position.set(rr(-1.2, 1.2), trunkH + rr(0.4, 1.6), rr(-1.2, 1.2));
-    s.scale.y = 0.75;
-    g.add(s);
-  }
-  g.position.y = 0;
-  g.userData.isTree = true;
-  parent.add(g);
-  return g;
-}
-
-function makeCar(color, isPolice) {
-  var g = new THREE.Group();
-  var bodyMat = lam(color);
-  box(4.4, 0.85, 2.0, bodyMat, 0, 0.75, 0, g);
-  box(2.3, 0.7, 1.8, lam(isPolice ? 0xF4F6F7 : 0x1B2A3A), -0.2, 1.5, 0, g); // cabin + glass
-  box(4.45, 0.28, 2.02, lam(isPolice ? 0xFFFFFF : color), 0, 1.12, 0, g); // belt stripe
-  var wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.3, 12);
-  var wheelMat = lam(0x111111);
-  var hubMat = lam(0xC0C0C0);
-  [[1.5, 0.95], [1.5, -0.95], [-1.5, 0.95], [-1.5, -0.95]].forEach(function (p) {
-    var w = new THREE.Mesh(wheelGeo, wheelMat);
-    w.rotation.x = Math.PI / 2; w.position.set(p[0], 0.42, p[1]); g.add(w);
-    var hub = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.32, 8), hubMat);
-    hub.rotation.x = Math.PI / 2; hub.position.set(p[0], 0.42, p[1]); g.add(hub);
-  });
-  // headlights (front = +X) and taillights
-  box(0.1, 0.22, 0.42, lam(0xFFF9C4, { emissive: 0xAAA455 }), 2.22, 0.85, 0.6, g);
-  box(0.1, 0.22, 0.42, lam(0xFFF9C4, { emissive: 0xAAA455 }), 2.22, 0.85, -0.6, g);
-  box(0.1, 0.22, 0.42, lam(0xFF2A1E, { emissive: 0x881111 }), -2.22, 0.85, 0.6, g);
-  box(0.1, 0.22, 0.42, lam(0xFF2A1E, { emissive: 0x881111 }), -2.22, 0.85, -0.6, g);
-  if (isPolice) {
-    box(1.1, 0.22, 0.5, lam(0x2244FF, { emissive: 0x1122AA }), -0.2, 1.95, -0.3, g);
-    box(1.1, 0.22, 0.5, lam(0xFF2222, { emissive: 0xAA1111 }), -0.2, 1.95, 0.3, g);
-    box(0.06, 0.5, 1.4, lam(0xFFFFFF), -1.2, 1.35, 0, g); // door POLISI band
-  }
-  return g;
-}
-
-function makePed(shirt) {
-  var g = new THREE.Group();
-  box(0.22, 0.5, 0.22, lam(0x2C3E50), -0.12, 0.25, 0, g);
-  box(0.22, 0.5, 0.22, lam(0x2C3E50), 0.12, 0.25, 0, g);
-  var body = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.38, 0.95, 8), lam(shirt));
-  body.position.y = 0.98; g.add(body);
-  var head = new THREE.Mesh(new THREE.SphereGeometry(0.27, 10, 8), lam(0xE8B98A));
-  head.position.y = 1.68; g.add(head);
-  if (rng() < 0.4) {
-    var cap = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.29, 0.1, 10), lam(pick(CAR_COLORS)));
-    cap.position.y = 1.9; g.add(cap);
-  }
-  g.scale.setScalar(rr(0.92, 1.08));
-  return g;
-}
-
-function makeBoat(len, color, withSail) {
-  var g = new THREE.Group();
-  var hullMat = lam(color);
-  box(len, 2.0, 4.4, hullMat, 0, 1.0, 0, g);
-  box(len * 0.92, 0.5, 4.6, lam(0xF4F6F7), 0, 2.1, 0, g); // gunwale rim
-  var bow = new THREE.Mesh(new THREE.ConeGeometry(2.2, len * 0.32, 4), hullMat);
-  bow.rotation.z = -Math.PI / 2;
-  bow.scale.set(1, 1, 2.0); bow.position.set(len / 2 + len * 0.14, 1.0, 0); g.add(bow);
-  box(len * 0.28, 1.6, 3.0, lam(0xF4F6F7), -len * 0.18, 3.1, 0, g); // cabin
-  box(len * 0.2, 0.8, 2.6, lam(0x1B2A3A), -len * 0.18, 4.2, 0, g); // cabin glass
-  if (withSail) {
-    var mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 8, 6), lam(0x6B4A2F));
-    mast.position.set(len * 0.1, 6, 0); g.add(mast);
-    var sailGeo = new THREE.BufferGeometry();
-    sailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
-      0, 2.4, 0, 0, 9.4, 0, 5.2, 2.4, 0]), 3));
-    sailGeo.computeVertexNormals();
-    var sail = new THREE.Mesh(sailGeo, new THREE.MeshLambertMaterial({ color: 0xFFF3D6, side: THREE.DoubleSide }));
-    sail.position.set(len * 0.1, 0, 0); g.add(sail);
-  }
-  return g;
-}
-
-function makeShip() {
-  var g = new THREE.Group();
-  var hull = box(34, 4.2, 9, lam(0x1F618D), 0, 2.1, 0, g);
-  var bow = new THREE.Mesh(new THREE.ConeGeometry(4.5, 7, 4), lam(0x1F618D));
-  bow.rotation.z = -Math.PI / 2;
-  bow.scale.set(1, 1, 2.0); bow.position.set(20, 2.1, 0); g.add(bow);
-  box(33, 0.5, 9.2, lam(0xF4F6F7), 0, 4.4, 0, g); // deck
-  var contColors = [0xC0392B, 0x2E86C1, 0xF1C40F, 0x117A65, 0xE67E22];
-  for (var i = 0; i < 6; i++) {
-    box(4.5, 2.4, 3.8, lam(pick(contColors)), -12 + i * 5.2, 5.9, (i % 2 ? 1.8 : -1.8), g);
-    if (i % 2 === 0) box(4.5, 2.4, 3.8, lam(pick(contColors)), -12 + i * 5.2, 8.3, (i % 2 ? 1.8 : -1.8), g);
-  }
-  box(5, 6.5, 7, lam(0xF4F6F7), 13.5, 7.6, 0, g); // bridge tower
-  box(5.1, 1.4, 7.1, lam(0x1B2A3A), 13.5, 9.6, 0, g); // bridge glass
-  var funnel = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 4.5, 10), lam(0xE8443A));
-  funnel.position.set(9, 8.5, 0); g.add(funnel);
-  var nameTex = textTexture('KM ARUNIKA', '#123A5C', '#FFFFFF', 64);
-  var nameMat = new THREE.MeshBasicMaterial({ map: nameTex });
-  var n1 = new THREE.Mesh(new THREE.PlaneGeometry(12, 3), nameMat);
-  n1.position.set(-2, 2.2, 4.55); g.add(n1);
-  var n2 = n1.clone(); n2.rotation.y = Math.PI; n2.position.z = -4.55; g.add(n2);
-  return g;
-}
-
-function makeHeli() {
-  var g = new THREE.Group();
-  box(4.6, 2.0, 2.3, lam(0x1A5276), 0, 0, 0, g); // body
-  box(1.6, 1.5, 2.1, lam(0x1B2A3A), 2.2, -0.1, 0, g); // glass nose
-  var tail = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.5, 5.5, 8), lam(0x1A5276));
-  tail.rotation.z = Math.PI / 2; tail.position.set(-4.6, 0.35, 0); g.add(tail);
-  box(0.3, 1.8, 0.9, lam(0xE8443A), -7.2, 1.0, 0, g); // tail fin
-  var rotorMat = lam(0x222222);
-  var r1 = box(8.5, 0.12, 0.5, rotorMat, 0, 1.35, 0, g);
-  var r2 = box(0.5, 0.12, 8.5, rotorMat, 0, 1.35, 0, g);
-  r1.rotation.y = 0.5; r2.rotation.y = 0.5;
-  var disc = new THREE.Mesh(new THREE.CircleGeometry(4.3, 24),
-    new THREE.MeshBasicMaterial({ color: 0xCCCCCC, transparent: true, opacity: 0.14, side: THREE.DoubleSide }));
-  disc.rotation.x = -Math.PI / 2; disc.position.y = 1.35; g.add(disc);
-  box(0.5, 0.9, 2.6, lam(0xE8443A), 0, -1.3, 0.9, g); // skid
-  box(0.5, 0.9, 2.6, lam(0xE8443A), 0, -1.3, -0.9, g);
-  return g; // spotlight cone + ground pool are built in buildWorld (height = heli height)
-}
-
-/* Spotlight: cone narrow at the heli, wide at the ground, + a bright pool. */
-function makeSpotlight(THREE, x, y, z) {
-  var g = new THREE.Group();
-  var spot = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.7, 6.5, y, 20, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0xFFF2B0, transparent: true, opacity: 0.16,
-      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  spot.position.set(x, y / 2, z); g.add(spot);
-  var pool = new THREE.Mesh(new THREE.CircleGeometry(6.5, 24),
-    new THREE.MeshBasicMaterial({ color: 0xFFE9A0, transparent: true, opacity: 0.5,
-      blending: THREE.AdditiveBlending, depthWrite: false }));
-  pool.rotation.x = -Math.PI / 2; pool.position.set(x, 0.15, z); g.add(pool);
-  return g;
-}
-
-function buildWorld(THREE) {
-  var scene = new THREE.Scene();
-  var sky = new THREE.Mesh(new THREE.SphereGeometry(700, 24, 16),
-    new THREE.MeshBasicMaterial({ map: skyTexture(), side: THREE.BackSide, fog: false }));
-  scene.add(sky);
-  scene.add(new THREE.HemisphereLight(0xFFD9B0, 0x4A3A5A, 0.95));
-  var sun = new THREE.DirectionalLight(0xFFB36B, 1.35);
-  sun.position.set(-120, 55, -60); scene.add(sun);
-
-  var world = { scene: scene, heroSigns: [], boats: [], anchors: {}, streets: STREETS };
-
-  // ground, beach, sea
-  var ground = new THREE.Mesh(new THREE.PlaneGeometry(560, 560), lam(0x454A52));
-  ground.rotation.x = -Math.PI / 2; scene.add(ground);
-  var beach = new THREE.Mesh(new THREE.PlaneGeometry(420, 16), lam(0xE8D5A3));
-  beach.rotation.x = -Math.PI / 2; beach.position.set(0, 0.06, 148); scene.add(beach);
-  var sea = new THREE.Mesh(new THREE.PlaneGeometry(620, 220), lam(0x2FA8B5));
-  sea.rotation.x = -Math.PI / 2; sea.position.set(0, 0.04, 266); scene.add(sea);
-
-  // roads with aligned white dashes
-  var roadTex = roadTexture();
-  var roadMat = new THREE.MeshLambertMaterial({ map: roadTex });
-  function roadStrip(w, l, x, z, rotY) {
-    var tex = roadTex.clone();
-    tex.needsUpdate = true; tex.repeat.set(1, Math.max(1, Math.round(l / 32)));
-    var m = new THREE.Mesh(new THREE.PlaneGeometry(w, l),
-      new THREE.MeshLambertMaterial({ map: tex }));
-    m.rotation.x = -Math.PI / 2; m.rotation.z = rotY || 0;
-    m.position.set(x, 0.08, z); scene.add(m);
-  }
-  STREETS.forEach(function (x) { roadStrip(10, 280, x, 0, 0); });
-  STREETS.forEach(function (z) { roadStrip(10, 280, 0, z, Math.PI / 2); });
-  roadStrip(9, 300, 0, 132, Math.PI / 2); // coastal avenue JL. PANTAI ROB
-
-  // ---- buildings, block by block ----
-  var facadeCache = {};
-  function facadeFor(base, shop) {
-    var key = base + '|' + (shop || '');
-    if (!facadeCache[key]) facadeCache[key] = facadeTexture(base, shop, pick(SHOP_BG));
-    return facadeCache[key];
-  }
-  function building(x, z, w, h, d, shop) {
-    var g = new THREE.Group();
-    var tex = facadeFor(pick(BUILDING_COLORS), shop);
-    var body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshLambertMaterial({ map: tex }));
-    body.position.y = h / 2; g.add(body);
-    box(w + 0.5, 0.5, d + 0.5, lam(0x2C2C34), 0, h + 0.25, 0, g); // roof slab
-    if (rng() < 0.5) box(rr(1, 2), 0.8, rr(1, 2), lam(0x888888), rr(-w / 4, w / 4), h + 0.9, rr(-d / 4, d / 4), g);
-    if (rng() < 0.4) { // balcony
-      box(w * 0.5, 0.25, 1.2, lam(0x5D4037), 0, h * 0.55, d / 2 + 0.5, g);
-      box(0.15, 1.0, 1.2, lam(0x8D6E63), -w * 0.25, h * 0.55 + 0.5, d / 2 + 0.5, g);
-      box(0.15, 1.0, 1.2, lam(0x8D6E63), w * 0.25, h * 0.55 + 0.5, d / 2 + 0.5, g);
-    }
-    g.position.set(x, 0, z);
-    scene.add(g);
-    return g;
+  function canvasTex(w, h, draw) {
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    draw(c.getContext('2d'), w, h);
+    var t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   }
 
-  var shopIdx = 0;
-  [-100, -60, -20, 20, 60, 100].forEach(function (bx) {
-    [-100, -60, -20, 20, 60, 100].forEach(function (bz) {
-      if (bx === -20 && bz === 20) return; // PASAR ARUN plaza
-      if (bx === 60 && bz === -60) return; // park
-      if (bx === 100 && bz >= 60) return;  // harbour containers zone
-      var n = ri(2, 4);
-      for (var i = 0; i < n; i++) {
-        var w = rr(9, 16), d = rr(9, 15);
-        var h = rr(6, bx * bx + bz * bz < 8000 ? 22 : 13);
-        var x = bx + rr(-11, 11), z = bz + rr(-11, 11);
-        var onMain = Math.abs(x) < 14 || Math.abs(z) < 14;
-        var shop = onMain && rng() < 0.6 ? SHOP_NAMES[shopIdx++ % SHOP_NAMES.length] : null;
-        building(x, z, w, h, d, shop);
-      }
-    });
-  });
-
-  // coastal shop row facing the sea road (facades at z=118)
-  for (var sx = -100; sx <= 100; sx += 20) {
-    if (sx === 5) continue; // hero shop below
-    var shop = SHOP_NAMES[shopIdx++ % SHOP_NAMES.length];
-    building(sx + rr(-3, 3), 112, rr(13, 16), rr(7, 11), 12, shop);
-  }
-  // hero shops: one shophouse on the street side, two beach kiosks on the
-  // sand side — spread across the chase frame so no two signs overlap.
-  function heroSign(name, bg, x, y, z, w, h) {
-    var tex = textTexture(name, bg, '#FFFFFF', 56);
-    var sign = new THREE.Mesh(new THREE.PlaneGeometry(w || 8.5, h || 2.1),
-      new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
-    sign.position.set(x, y, z);
-    sign.userData.heroName = name;
-    scene.add(sign);
-    world.heroSigns.push(sign);
-    return sign;
-  }
-  building(5, 112, 15, 10, 12, 'KEDAI BAKSO');
-  // Roadside signboard (F3): the facade sign is edge-on to the chase camera
-  // and its left half hides behind the neighbouring shophouse, so the board
-  // stands on posts in front of the building line (z=124) where the
-  // sightline from the chase camera is clear. Posts sit under the board's
-  // ends as seen from the chase camera.
-  heroSign('KEDAI BAKSO', '#C0392B', 8, 7.2, 124);
-  box(0.3, 6.2, 0.3, lam(0x4E342E), 7.3, 3.1, 128.2, scene);
-  box(0.3, 6.2, 0.3, lam(0x4E342E), 8.7, 3.1, 119.8, scene);
-  function beachKiosk(name, bg, x, z) {
-    box(6, 6, 5, lam(0xE8C9A0), x, 3, z, scene);
-    box(7, 0.5, 6, lam(0xC0392B), x, 6.2, z, scene); // roof
-    box(5.5, 2.2, 0.4, lam(0x2E86C1), x, 2.2, z - 2.6, scene); // counter
-    var poleMat = lam(0x4E342E);
-    var p1 = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 2.4, 6), poleMat);
-    p1.position.set(x - 4.2, 7.2, z - 2.6); scene.add(p1);
-    var p2 = p1.clone(); p2.position.x = x + 4.2; scene.add(p2);
-    heroSign(name, bg, x, 8.4, z - 2.6, 11, 2.7); // bigger: beach kiosks sit far from the chase camera
-  }
-  beachKiosk('TOKO BANGUNAN', '#1F618D', 30, 147);
-  beachKiosk('APOTEK', '#117A65', 70, 144);
-
-  // ---- PASAR ARUN plaza ----
-  var plaza = new THREE.Mesh(new THREE.PlaneGeometry(38, 38), lam(0x7A7568));
-  plaza.rotation.x = -Math.PI / 2; plaza.position.set(-20, 0.09, 20); scene.add(plaza);
-  var tugu = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 1.0, 4.5, 8), lam(0xD7B98A));
-  tugu.position.set(-36, 2.25, 36); scene.add(tugu); // far plaza corner: out of the combat frame centre
-  world.tugu = tugu;
-  box(2.2, 0.6, 2.2, lam(0x8D6E63), -36, 0.3, 36, scene);
-  var stallColors = [0xE8443A, 0xF1C40F, 0x2E86C1, 0x117A65, 0xE67E22, 0x7D3C98];
-  var stalls = [];
-  for (var s = 0; s < 6; s++) {
-    var sg = new THREE.Group();
-    var ang = (s / 6) * Math.PI * 2;
-    var px = -20 + Math.cos(ang) * 13, pz = 20 + Math.sin(ang) * 13;
-    box(4.5, 0.9, 2.4, lam(0x6B4A2F), 0, 0.9, 0, sg);
-    var canopy = box(5, 0.15, 3, lam(stallColors[s]), 0, 2.6, 0, sg);
-    canopy.rotation.z = 0.12;
-    for (var f = 0; f < 5; f++) {
-      var fruit = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6),
-        lam(pick([0xFF6B35, 0xFFD23F, 0x7BE495, 0xE86A92])));
-      fruit.position.set(-1.8 + f * 0.9, 1.55, rr(-0.6, 0.6)); sg.add(fruit);
-    }
-    sg.position.set(px, 0, pz); sg.rotation.y = -ang + Math.PI / 2;
-    scene.add(sg); stalls.push(sg);
-  }
-  world.stalls = stalls;
-
-  // ---- park ----
-  var grass = new THREE.Mesh(new THREE.PlaneGeometry(36, 36), lam(0x4C8A3F));
-  grass.rotation.x = -Math.PI / 2; grass.position.set(60, 0.09, -60); scene.add(grass);
-
-  // ---- trees (kept out of the chase sightline and hero-sign sightlines) ----
-  function treeAt(x, z) {
-    var t = makeTree(scene);
-    t.position.set(x, 0, z); t.rotation.y = rr(0, Math.PI * 2);
-    var sc = rr(0.85, 1.35); t.scale.set(sc, sc, sc);
-  }
-  for (var tx = -110; tx <= 110; tx += 20) {
-    [-118, -78, -38, 2, 42, 82, 118].forEach(function (tz) {
-      if (rng() < 0.45) treeAt(tx + rr(-4, 4), tz + rr(-3, 3));
+  // ---- langit sunset / malam ----
+  function skyTex(night) {
+    return canvasTex(16, 512, function (g, w, h) {
+      var gr = g.createLinearGradient(0, 0, 0, h);
+      if (night) { gr.addColorStop(0, '#0B1030'); gr.addColorStop(.55, '#1B2350'); gr.addColorStop(1, '#3A2A5E'); }
+      else { gr.addColorStop(0, '#6B4A8F'); gr.addColorStop(.5, '#E86A92'); gr.addColorStop(1, '#FFB36B'); }
+      g.fillStyle = gr; g.fillRect(0, 0, w, h);
+      if (!night) { g.fillStyle = 'rgba(255,220,150,.9)'; g.beginPath(); g.arc(8, 400, 26, 0, 7); g.fill(); }
+      else { g.fillStyle = '#E8ECFF'; for (var i = 0; i < 40; i++) g.fillRect(R(0, 16), R(0, 300), 1, 1); }
     });
   }
-  for (var i = 0; i < 12; i++) treeAt(60 + rr(-15, 15), -60 + rr(-15, 15)); // park
-  for (var b = 0; b < 10; b++) treeAt(-100 + b * 20 + rr(-4, 4), 143 + rr(-2, 2)); // beach palms
-  // clear chase corridor + hero-sign sightlines (hide any tree that landed there)
-  scene.traverse(function (o) {
-    if (o.userData && o.userData.isTree) {
-      var p = o.position;
-      if (p.x > -32 && p.x < 72 && p.z > 104 && p.z < 130) o.visible = false;
-      if (p.x > 16 && p.x < 46 && p.z > 136 && p.z < 156) o.visible = false; // TOKO BANGUNAN kiosk (F3: canopy covered the G)
-      if (p.x > 56 && p.x < 84 && p.z > 136 && p.z < 156) o.visible = false; // APOTEK kiosk
-    }
-  });
 
-  // ---- parked + traffic cars ----
-  var parked = [];
-  for (var c = 0; c < 22; c++) {
-    var car = makeCar(pick(CAR_COLORS), false);
-    var horizontal = rng() < 0.5;
-    var street = pick(STREETS);
-    if (horizontal) {
-      car.position.set(rr(-130, 130), 0, street + (rng() < 0.5 ? 4.2 : -4.2));
-      car.rotation.y = rng() < 0.5 ? 0 : Math.PI;
+  // ---- fasad gedung hidup: jendela menyala, pintu, papan nama, balkon ----
+  var SIGNS = ['WARUNG KOPI ARUN', 'BENGKEL JAYA', 'KOST MELATI', 'RM PADANG SARI',
+    'TOKO KELONTONG', 'PASAR ARUN', 'LAUNDRY BERSIH', 'FOTOKOPI ARUN', 'APOTEK SEHAT',
+    'BAKSO PAK JO', 'WARTEG BU SRI', 'CELL ARUNIKA', 'BARBERSHOP ROB', 'IKAN BAKAR 88'];
+  var PALETTES = [
+    { base: '#E8A87C', trim: '#C97B4A', win: '#FFD166' },
+    { base: '#7FB3A0', trim: '#4E8570', win: '#FFE9A8' },
+    { base: '#D97B7B', trim: '#A94F4F', win: '#FFF2B0' },
+    { base: '#8FA8D8', trim: '#5F7FB0', win: '#FFE08A' },
+    { base: '#E8D5A3', trim: '#B89B5E', win: '#FFD166' },
+    { base: '#C98FD0', trim: '#9668A8', win: '#FFF0A0' }
+  ];
+  function facadeTex(pal, sign, floors, lit) {
+    return canvasTex(256, 256, function (g) {
+      var grad = g.createLinearGradient(0, 0, 0, 256);
+      grad.addColorStop(0, pal.base); grad.addColorStop(1, pal.trim);
+      g.fillStyle = grad; g.fillRect(0, 0, 256, 256);
+      // papan nama toko
+      g.fillStyle = '#241A33'; g.fillRect(0, 8, 256, 34);
+      g.fillStyle = '#FFD166'; g.font = 'bold 17px Arial'; g.textAlign = 'center';
+      g.fillText(sign, 128, 31);
+      // jendela per lantai
+      var fh = (256 - 50) / floors;
+      for (var f = 0; f < floors; f++) for (var c = 0; c < 4; c++) {
+        var x = 18 + c * 60, y = 52 + f * fh + 8, w = 38, h = Math.min(34, fh - 16);
+        var on = rng() < lit;
+        g.fillStyle = on ? pal.win : '#2A2140';
+        g.fillRect(x, y, w, h);
+        g.strokeStyle = 'rgba(0,0,0,.5)'; g.lineWidth = 3; g.strokeRect(x, y, w, h);
+        g.beginPath(); g.moveTo(x + w / 2, y); g.lineTo(x + w / 2, y + h); g.stroke();
+        if (f % 2 === 0) { // balkon: pelat + pagar vertikal, dibuat besar biar terbaca
+          g.fillStyle = 'rgba(20,12,30,.65)'; g.fillRect(x - 4, y + h, w + 8, 9);
+          g.fillStyle = '#3A2A55';
+          for (var r = 0; r < 5; r++) g.fillRect(x - 4 + r * 10, y + h + 9, 3, 12);
+          g.fillRect(x - 4, y + h + 9, w + 8, 2);
+        }
+      }
+      // pintu
+      g.fillStyle = '#3A2418'; g.fillRect(108, 222, 40, 34);
+      g.fillStyle = '#FFD166'; g.fillRect(140, 238, 4, 4);
+      // garis air banjir di dinding
+      g.fillStyle = 'rgba(47,168,181,.35)'; g.fillRect(0, 226, 256, 30);
+    });
+  }
+
+  function makeCar(color, police) {
+    var car = new THREE.Group();
+    var bodyMat = new THREE.MeshLambertMaterial({ color: color });
+    var body = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.62, 4.4), bodyMat);
+    body.position.y = 0.55; car.add(body);
+    var cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.55, 2.2),
+      new THREE.MeshLambertMaterial({ color: 0x1C2438 }));
+    cabin.position.set(0, 1.1, -0.2); car.add(cabin);
+    // kap + lampu depan
+    var hood = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.18, 1.0),
+      new THREE.MeshLambertMaterial({ color: 0x222222 }));
+    hood.position.set(0, 0.92, 1.8); car.add(hood);
+    var lampMat = new THREE.MeshBasicMaterial({ color: 0xFFF6C8 });
+    [-0.65, 0.65].forEach(function (x) {
+      var l = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.16, 0.1), lampMat);
+      l.position.set(x, 0.62, 2.21); car.add(l);
+      var t = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.16, 0.1),
+        new THREE.MeshBasicMaterial({ color: 0xFF2222 }));
+      t.position.set(x, 0.62, -2.21); car.add(t);
+    });
+    var wheelMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+    [[-0.95, 1.45], [0.95, 1.45], [-0.95, -1.45], [0.95, -1.45]].forEach(function (p) {
+      var w = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.3, 12), wheelMat);
+      w.rotation.z = Math.PI / 2; w.position.set(p[0], 0.38, p[1]); car.add(w);
+    });
+    if (police) {
+      var stripe = new THREE.Mesh(new THREE.BoxGeometry(2.02, 0.2, 4.42),
+        new THREE.MeshLambertMaterial({ color: 0x2244CC }));
+      stripe.position.y = 0.72; car.add(stripe);
+      var bar = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.16, 0.3),
+        new THREE.MeshBasicMaterial({ color: 0xFF2244 }));
+      bar.position.set(0, 1.45, -0.2); car.add(bar);
+      var bar2 = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.16, 0.3),
+        new THREE.MeshBasicMaterial({ color: 0x2244FF }));
+      bar2.position.set(0, 1.45, 0.15); car.add(bar2);
+    }
+    return car;
+  }
+
+  function makeTree() {
+    var t = new THREE.Group();
+    var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, R(1.6, 2.6), 7),
+      new THREE.MeshLambertMaterial({ color: 0x6B4226 }));
+    trunk.position.y = 1.1; t.add(trunk);
+    var greens = [0x2E7D4F, 0x3E9B5F, 0x1F6B3A, 0x5FAE6A];
+    var n = 2 + Math.floor(rng() * 2);
+    for (var i = 0; i < n; i++) {
+      var s = R(0.9, 1.7);
+      var leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0),
+        new THREE.MeshLambertMaterial({ color: pick(greens) }));
+      leaf.position.set(R(-0.7, 0.7), R(2.2, 3.4), R(-0.7, 0.7));
+      leaf.scale.y = 0.8; t.add(leaf);
+    }
+    return t;
+  }
+
+  function makePerson(shirt) {
+    var p = new THREE.Group();
+    var mat = new THREE.MeshLambertMaterial({ color: shirt });
+    var body = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.85, 8), mat);
+    body.position.y = 0.95; p.add(body);
+    var head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8),
+      new THREE.MeshLambertMaterial({ color: 0xE8B88A }));
+    head.position.y = 1.55; p.add(head);
+    var legs = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 0.55, 8),
+      new THREE.MeshLambertMaterial({ color: 0x2A2A3A }));
+    legs.position.y = 0.28; p.add(legs);
+    return p;
+  }
+
+  function makeBoat(hullColor, trimColor, fishing) {
+    var b = new THREE.Group();
+    var hull = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.9, 7.5),
+      new THREE.MeshLambertMaterial({ color: hullColor }));
+    hull.position.y = 0.45; b.add(hull);
+    var bow = new THREE.Mesh(new THREE.ConeGeometry(1.1, 2.2, 4),
+      new THREE.MeshLambertMaterial({ color: hullColor }));
+    bow.rotation.x = -Math.PI / 2; bow.rotation.y = Math.PI / 4; bow.scale.set(1, 1, 0.45);
+    bow.position.set(0, 0.45, 4.6); b.add(bow);
+    var trim = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.18, 7.5),
+      new THREE.MeshLambertMaterial({ color: trimColor }));
+    trim.position.y = 0.95; b.add(trim);
+    var mast = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 3.4, 6),
+      new THREE.MeshLambertMaterial({ color: 0x6B4226 }));
+    mast.position.y = 2.4; b.add(mast);
+    if (fishing) {
+      [-1.9, 1.9].forEach(function (x) {
+        var out = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 5.5, 6),
+          new THREE.MeshLambertMaterial({ color: 0x8B5A2B }));
+        out.rotation.x = Math.PI / 2; out.position.set(x, 0.3, 0); b.add(out);
+      });
+      var net = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 2.2),
+        new THREE.MeshLambertMaterial({ color: 0xD8C98A }));
+      net.position.set(0, 1.2, -1.2); b.add(net);
     } else {
-      car.position.set(street + (rng() < 0.5 ? 4.2 : -4.2), 0, rr(-130, 130));
-      car.rotation.y = rng() < 0.5 ? Math.PI / 2 : -Math.PI / 2;
+      var cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.9, 2.4),
+        new THREE.MeshLambertMaterial({ color: 0xFFFFFF }));
+      cabin.position.set(0, 1.4, -0.8); b.add(cabin);
     }
-    scene.add(car); parked.push(car);
+    return b;
   }
-  world.parkedCars = parked;
-  var traffic = [];
-  for (var t2 = 0; t2 < 6; t2++) {
-    var tc = makeCar(pick(CAR_COLORS), false);
-    tc.position.set(pick(STREETS) + rr(-2, 2), 0, rr(-120, 120));
-    tc.rotation.y = Math.PI / 2; scene.add(tc); traffic.push(tc);
-  }
-  world.traffic = traffic;
 
-  // ---- player car + police ----
-  var playerCar = makeCar(0xE8443A, false);
-  playerCar.position.set(8, 0, 132); scene.add(playerCar);
-  world.playerCar = playerCar;
-  var police1 = makeCar(0x1A5276, true); police1.position.set(-6, 0, 132.5); scene.add(police1);
-  var police2 = makeCar(0x1A5276, true); police2.position.set(-18, 0, 131); scene.add(police2);
-  world.policeCars = [police1, police2];
+  // ---- kios: ATAP DUDUK DI TIANG (tidak melayang) ----
+  function makeKiosk(sign) {
+    var k = new THREE.Group();
+    var postMat = new THREE.MeshLambertMaterial({ color: 0x4A3220 });
+    [[-1.4, -1.1], [1.4, -1.1], [-1.4, 1.1], [1.4, 1.1]].forEach(function (p) {
+      var post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 2.4, 8), postMat);
+      post.position.set(p[0], 1.2, p[1]); k.add(post);
+    });
+    var counter = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.0, 2.2),
+      new THREE.MeshLambertMaterial({ color: 0xB08954 }));
+    counter.position.y = 0.5; k.add(counter);
+    var roof = new THREE.Mesh(new THREE.ConeGeometry(2.6, 1.0, 4),
+      new THREE.MeshLambertMaterial({ color: 0xC0392B }));
+    roof.position.y = 2.9; roof.rotation.y = Math.PI / 4; k.add(roof);
+    var board = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.55),
+      new THREE.MeshBasicMaterial({ map: canvasTex(256, 48, function (g) {
+        g.fillStyle = '#241A33'; g.fillRect(0, 0, 256, 48);
+        g.fillStyle = '#FFD166'; g.font = 'bold 24px Arial'; g.textAlign = 'center';
+        g.fillText(sign, 128, 33);
+      }) }));
+    board.position.set(0, 2.15, 1.25); k.add(board);
+    // dagangan di atas meja
+    for (var i = 0; i < 6; i++) {
+      var item = new THREE.Mesh(new THREE.BoxGeometry(0.28, R(0.2, 0.45), 0.28),
+        new THREE.MeshLambertMaterial({ color: pick([0xE8443A, 0x2FA8B5, 0xFFD166, 0x7FB3A0]) }));
+      item.position.set(R(-1.2, 1.2), 1.2, R(-0.7, 0.7)); k.add(item);
+    }
+    return k;
+  }
 
-  // ---- pedestrians: market crowd + beach crowd + walkers ----
-  var peds = [];
-  function pedAt(x, z) {
-    var p = makePed(pick([0xE8443A, 0x2E86C1, 0xF1C40F, 0xECF0F1, 0x7D3C98, 0xE67E22, 0x16A085]));
-    p.position.set(x, 0, z); p.rotation.y = rr(0, Math.PI * 2);
-    scene.add(p); peds.push(p);
-  }
-  for (var m = 0; m < 14; m++) pedAt(-20 + rr(-14, 14), 20 + rr(-14, 14)); // market crowd
-  for (var b2 = 0; b2 < 8; b2++) pedAt(rr(-90, -30), rr(141, 151)); // beach crowd
-  for (var w2 = 0; w2 < 16; w2++) pedAt(pick(STREETS) + rr(-6, 6), rr(-120, 120));
-  world.peds = peds;
+  function buildWorld(scene, opts) {
+    opts = opts || {};
+    var night = !!opts.night;
+    scene.background = skyTex(night);
+    scene.fog = new THREE.Fog(night ? 0x1B2350 : 0xE86A92, 90, 260);
+    var hemi = new THREE.HemisphereLight(night ? 0x8A9ACF : 0xFFD9B0, 0x2A4A3A, night ? 0.7 : 1.0);
+    scene.add(hemi);
+    var sun = new THREE.DirectionalLight(night ? 0xB0C4FF : 0xFFB36B, night ? 0.5 : 1.1);
+    sun.position.set(-40, 60, 30); scene.add(sun);
 
-  // ---- harbour: containers, pier, boats, ship ----
-  for (var k = 0; k < 10; k++) {
-    var cc = pick([0xC0392B, 0x2E86C1, 0xF1C40F, 0x117A65, 0xE67E22]);
-    box(6, 2.6, 2.6, lam(cc), 100 + (k % 5) * 7, 1.3, 108 + Math.floor(k / 5) * 8, scene);
-    if (k % 3 === 0) box(6, 2.6, 2.6, lam(pick([0xC0392B, 0x2E86C1, 0xF1C40F])), 100 + (k % 5) * 7, 3.9, 108 + Math.floor(k / 5) * 8, scene);
-  }
-  for (var p = 0; p < 12; p++) { // pier planks (F5: 15 wide so the pier reads big on the map)
-    box(15, 0.35, 3.6, lam(p % 2 ? 0x8D6E63 : 0x6D4C41), 112, 0.5, 152 + p * 4.2, scene);
-  }
-  for (var pp = 0; pp < 6; pp++) {
-    var post = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 3, 6), lam(0x4E342E));
-    post.position.set(105.5, 0.8, 154 + pp * 9); scene.add(post);
-    var post2 = post.clone(); post2.position.x = 118.5; scene.add(post2);
-  }
-  var ship = makeShip();
-  ship.position.set(100, 0.1, 178); ship.rotation.y = -0.35; scene.add(ship);
-  world.ship = ship;
-  var boat1 = makeBoat(16, 0xE67E22, true); boat1.position.set(-55, 0.1, 168); boat1.rotation.y = 0.5; scene.add(boat1);
-  var boat2 = makeBoat(22, 0xE8443A, true); boat2.position.set(38, 0.1, 172); boat2.rotation.y = -1.74; scene.add(boat2); // F1: big red fishing boat, long axis across the chase view so the hull reads >=150px
-  var boat3 = makeBoat(11, 0xC0392B, false); boat3.position.set(122, 0.1, 162); boat3.rotation.y = 1.1; scene.add(boat3);
-  var boat4 = makeBoat(10, 0x117A65, false); boat4.position.set(126, 0.1, 186); boat4.rotation.y = -0.4; scene.add(boat4);
-  world.boats = [ship, boat1, boat2, boat3, boat4];
+    var refs = { boats: [], police: [], people: [] };
 
-  // ---- helicopter (chase shot) + spotlight onto the player car ----
-  var heli = makeHeli();
-  heli.position.set(16, 24, 131); scene.add(heli);
-  world.heli = heli;
-  var spot = makeSpotlight(THREE, 16, 24, 131);
-  scene.add(spot);
-  world.spotlight = spot;
+    // ---- tanah dasar, laut, pasir ----
+    var ground = new THREE.Mesh(new THREE.PlaneGeometry(340, 340),
+      new THREE.MeshLambertMaterial({ color: 0x9A8F6A }));
+    ground.rotation.x = -Math.PI / 2; ground.position.set(0, 0, 0); scene.add(ground);
+    var sea = new THREE.Mesh(new THREE.PlaneGeometry(120, 340),
+      new THREE.MeshLambertMaterial({ color: 0x2FA8B5 }));
+    sea.rotation.x = -Math.PI / 2; sea.position.set(150, 0.15, 0); scene.add(sea);
+    var sea2 = new THREE.Mesh(new THREE.PlaneGeometry(120, 340),
+      new THREE.MeshLambertMaterial({ color: 0x2795A2 }));
+    sea2.rotation.x = -Math.PI / 2; sea2.position.set(150, 0.12, 0); sea2.scale.set(1, 1, 1); scene.add(sea2);
+    var sand = new THREE.Mesh(new THREE.PlaneGeometry(26, 340),
+      new THREE.MeshLambertMaterial({ color: 0xE8D5A3 }));
+    sand.rotation.x = -Math.PI / 2; sand.position.set(78, 0.1, 0); scene.add(sand);
 
-  // ---- ROB flood: water pushing into the city (F2: brighter teal, wider,
-  // foam streaks + splashes + debris so the flood reads in S1 and S2) ----
-  var floodMat = new THREE.MeshLambertMaterial({ color: 0x2FB3D4, transparent: true, opacity: 0.72 });
-  var floodMarket = new THREE.Mesh(new THREE.PlaneGeometry(56, 56), floodMat);
-  floodMarket.rotation.x = -Math.PI / 2; floodMarket.position.set(-20, 0.35, 20); scene.add(floodMarket);
-  var floodRoad = new THREE.Mesh(new THREE.PlaneGeometry(80, 18), floodMat.clone());
-  floodRoad.rotation.x = -Math.PI / 2; floodRoad.position.set(34, 0.35, 132); scene.add(floodRoad);
-  // foam, splashes and debris use a separate seeded RNG so the main
-  // placement sequence (and every other shot) is untouched
-  var fxRng = mulberry32(20261121);
-  function fxRR(a, b) { return a + fxRng() * (b - a); }
-  var foamMat = new THREE.MeshBasicMaterial({ color: 0xEAF7FF, transparent: true, opacity: 0.4, depthWrite: false });
-  var splashMat = new THREE.MeshLambertMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.85 });
-  function foamStreak(cx, cz, len, w, rot) {
-    var m = new THREE.Mesh(new THREE.PlaneGeometry(len, w), foamMat);
-    m.rotation.x = -Math.PI / 2; m.rotation.z = rot;
-    m.position.set(cx, 0.42, cz); scene.add(m);
-  }
-  function splash(cx, cz) {
-    var s = new THREE.Mesh(new THREE.ConeGeometry(fxRR(0.25, 0.55), fxRR(0.7, 1.4), 6), splashMat);
-    s.position.set(cx, 0.35, cz); scene.add(s);
-  }
-  for (var f1 = 0; f1 < 8; f1++) foamStreak(fxRR(0, 68), fxRR(124, 140), fxRR(6, 14), fxRR(0.5, 1.1), fxRR(-0.4, 0.4));
-  for (var f2 = 0; f2 < 10; f2++) splash(fxRR(0, 68), fxRR(124, 140));
-  for (var f3 = 0; f3 < 10; f3++) foamStreak(fxRR(-44, 4), fxRR(-4, 44), fxRR(5, 12), fxRR(0.5, 1.1), fxRR(-0.4, 0.4));
-  for (var f4 = 0; f4 < 12; f4++) splash(fxRR(-44, 4), fxRR(-4, 44));
-  for (var f5 = 0; f5 < 3; f5++) { // crates adrift in the market flood
-    var crate = box(1.3, 0.5, 0.9, lam(0x8D6E63), fxRR(-40, 0), 0.55, fxRR(0, 40), scene);
-    crate.rotation.y = fxRR(0, Math.PI);
-  }
-  world.flood = [floodMarket, floodRoad];
+    // ---- dermaga / pier menjorok ke laut ----
+    var pierMat = new THREE.MeshLambertMaterial({ color: 0x7A5230 });
+    for (var pi = 0; pi < 26; pi++) {
+      var plank = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.25, 7),
+        pierMat);
+      plank.position.set(96 + pi * 3.1, 0.9, 30); scene.add(plank);
+      var pile = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.6, 6),
+        new THREE.MeshLambertMaterial({ color: 0x4A3220 }));
+      pile.position.set(96 + pi * 3.1, 0.2, 28.6); scene.add(pile);
+      var pile2 = pile.clone(); pile2.position.z = 31.4; scene.add(pile2);
+    }
+    // lampu dermaga
+    for (var li = 0; li < 5; li++) {
+      var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 3.2, 6),
+        new THREE.MeshLambertMaterial({ color: 0x222222 }));
+      pole.position.set(100 + li * 16, 2.4, 28.8); scene.add(pole);
+      var lamp = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6),
+        new THREE.MeshBasicMaterial({ color: 0xFFE9A8 }));
+      lamp.position.set(100 + li * 16, 4.1, 28.8); scene.add(lamp);
+    }
 
-  world.anchors = {
-    pantaiRob: new THREE.Vector3(-60, 2, 150),
-    pelabuhan: new THREE.Vector3(115, 2, 168),
-    pasarArun: new THREE.Vector3(-20, 2, 20),
-    kumalaStrand: new THREE.Vector3(10, 2, -60),
-    roadPantai: new THREE.Vector3(-30, 2, 132),
-    roadKumala: new THREE.Vector3(0, 2, -40),
-    roadPasar: new THREE.Vector3(-60, 2, 20),
-    roadPelabuhan: new THREE.Vector3(95, 2, 100),
-    ship: new THREE.Vector3(100, 6, 178),
-    pier: new THREE.Vector3(112, 2, 180)
-  };
-  return world;
-}
+    // ---- dermaga SRI ARUNIKA ke-2: kayu, terlihat di shot chase (kanan frame) ----
+    // Dermaga lama di z=30, x>=96 jatuh ~69° ke kanan kamera S1 (di luar FOV).
+    // Yang ini menjorok dari pasir ke laut di z=-12, x 82..107: ~23-39° ke kanan, dalam frame.
+    for (var pj = 0; pj < 8; pj++) {
+      var plank2 = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.25, 7), pierMat);
+      plank2.position.set(84 + pj * 3.1, 0.9, -12); scene.add(plank2);
+      var pileA = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.6, 6),
+        new THREE.MeshLambertMaterial({ color: 0x4A3220 }));
+      pileA.position.set(84 + pj * 3.1, 0.2, -13.4); scene.add(pileA);
+      var pileB = pileA.clone(); pileB.position.z = -10.6; scene.add(pileB);
+    }
+    // lampu dermaga ke-2
+    [88, 100].forEach(function (lx) {
+      var pole2 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 3.2, 6),
+        new THREE.MeshLambertMaterial({ color: 0x222222 }));
+      pole2.position.set(lx, 2.4, -13.2); scene.add(pole2);
+      var lamp2 = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6),
+        new THREE.MeshBasicMaterial({ color: 0xFFE9A8 }));
+      lamp2.position.set(lx, 4.1, -13.2); scene.add(lamp2);
+    });
 
-window.TA = window.TA || {};
-TA.buildWorld = buildWorld;
-TA.makeCar = makeCar;
-TA.makePed = makePed;
-TA.STREETS = STREETS;
+    // ---- perahu: pantai + dermaga + laut ----
+    var boatDefs = [
+      { x: 96, z: -40, c: 0xFFFFFF, t: 0x2FA8B5, f: true, ry: 0.4 },
+      { x: 102, z: -18, c: 0xFFF2CC, t: 0xE8443A, f: true, ry: -0.3 },
+      { x: 108, z: -16, c: 0xFFFFFF, t: 0x3E9B5F, f: false, ry: 1.57 }, // SRI ARUNIKA di pier baru (terlihat S1)
+      { x: 122, z: 62, c: 0xFFE9A8, t: 0xE86A92, f: true, ry: 1.2 },
+      { x: 118, z: -70, c: 0xFFFFFF, t: 0x2FA8B5, f: false, ry: 0.9 },
+      { x: 90, z: 84, c: 0xFFD9B0, t: 0xC0392B, f: true, ry: 2.6 },
+      { x: 140, z: 10, c: 0xFFFFFF, t: 0x3E9B5F, f: false, ry: -0.7 }   // kapal nelayan lepas pantai
+    ];
+    boatDefs.forEach(function (d) {
+      var b = makeBoat(d.c, d.t, d.f);
+      b.position.set(d.x, 0.25, d.z); b.rotation.y = d.ry; scene.add(b); refs.boats.push(b);
+    });
+    // perahu penyelamat oranye di banjir
+    var rescue = makeBoat(0xFF7A1A, 0xFFFFFF, false);
+    rescue.position.set(30, 0.9, -12); rescue.rotation.y = 0.5; scene.add(rescue); refs.boats.push(rescue);
+
+    // ---- jalan: aspal + garis putih RATA mengikuti jalan ----
+    function road(x, z, w, l, vertical) {
+      var g = new THREE.Group();
+      var asp = new THREE.Mesh(new THREE.PlaneGeometry(w, l),
+        new THREE.MeshLambertMaterial({ color: 0x2E2E3A }));
+      asp.rotation.x = -Math.PI / 2; g.add(asp);
+      var dashMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+      var n = Math.floor(l / 6);
+      for (var i = 0; i < n; i++) {
+        var d = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 2.6), dashMat);
+        d.rotation.x = -Math.PI / 2;
+        if (vertical) d.position.set(0, 0.02, -l / 2 + 3 + i * 6);
+        else { d.rotation.z = Math.PI / 2; d.position.set(-l / 2 + 3 + i * 6, 0.02, 0); }
+        g.add(d);
+      }
+      // garis tepi putih
+      [-w / 2 + 0.4, w / 2 - 0.4].forEach(function (o) {
+        var e = new THREE.Mesh(new THREE.PlaneGeometry(0.25, l),
+          new THREE.MeshBasicMaterial({ color: 0xE8E8E8 }));
+        e.rotation.x = -Math.PI / 2;
+        if (vertical) e.position.set(o, 0.02, 0); else { e.rotation.z = Math.PI / 2; e.position.set(0, 0.02, o); }
+        g.add(e);
+      });
+      // zebra di ujung
+      for (var z2 = 0; z2 < 6; z2++) {
+        var zb = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 3.4),
+          new THREE.MeshBasicMaterial({ color: 0xFFFFFF }));
+        zb.rotation.x = -Math.PI / 2;
+        if (vertical) zb.position.set(-2.5 + z2, 0.02, l / 2 - 4);
+        else zb.position.set(l / 2 - 4, 0.02, -2.5 + z2);
+        g.add(zb);
+      }
+      g.position.set(x, 0.05, z); scene.add(g);
+    }
+    road(60, 0, 12, 300, true);    // JALAN DERMAGA (pesisir)
+    road(20, 0, 10, 300, true);    // JALAN PANTAI ROB
+    road(-20, 0, 10, 300, true);   // JALAN KOTA LAMA
+    road(0, -40, 10, 160, false);  // JALAN PASAR
+    road(0, 30, 10, 160, false);   // JALAN PELABUHAN
+    road(0, 80, 10, 160, false);   // JALAN STASIUN
+
+    // ---- blok kota: gedung hidup padat, isi semua celah ----
+    var blockXs = [-52, -38, -8, 6, 34, 46];
+    var blockZs = [-110, -80, -55, -18, 8, 48, 62, 100, 120];
+    var signIdx = 0;
+    blockXs.forEach(function (bx) {
+      blockZs.forEach(function (bz) {
+        if (Math.abs(bx - 20) < 9 || Math.abs(bx - 60) < 9 || Math.abs(bx + 20) < 9) return;
+        var floors = 2 + Math.floor(rng() * 3);
+        var pal = pick(PALETTES);
+        var sign = SIGNS[signIdx++ % SIGNS.length];
+        var tex = facadeTex(pal, sign, floors, night ? 0.85 : 0.55);
+        var h = floors * 3.4 + 1.2;
+        var b = new THREE.Mesh(new THREE.BoxGeometry(R(9, 13), h, R(8, 11)),
+          new THREE.MeshLambertMaterial({ map: tex }));
+        b.position.set(bx + R(-1.5, 1.5), h / 2, bz + R(-1.5, 1.5));
+        scene.add(b);
+        var roof = new THREE.Mesh(new THREE.BoxGeometry(b.geometry.parameters.width + 0.4, 0.3,
+          b.geometry.parameters.depth + 0.4),
+          new THREE.MeshLambertMaterial({ color: 0x3A2A44 }));
+        roof.position.set(b.position.x, h + 0.15, b.position.z); scene.add(roof);
+        // balkon 3D di fasad selatan (+Z, menghadap kamera S1/S3) untuk gedung
+        // di tepi jalan dermaga (bx 34/46, terlihat S1+S3) dan pasar (bx -38, terlihat S2)
+        if (bx === 46 || bx === 34 || bx === -38) {
+          var bw = b.geometry.parameters.width, bd = b.geometry.parameters.depth;
+          var balMat = new THREE.MeshLambertMaterial({ color: 0x3A2A55 });
+          var railMat = new THREE.MeshBasicMaterial({ color: 0x1A1428 });
+          [3.6, 7.0].forEach(function (by) {
+            if (by > h - 1.5) return;
+            [-2.4, 2.4].forEach(function (ox) {
+              var slab = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.18, 1.1), balMat);
+              slab.position.set(b.position.x + ox, by, b.position.z + bd / 2 + 0.55); scene.add(slab);
+              var rail = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.7, 0.08), railMat);
+              rail.position.set(b.position.x + ox, by + 0.45, b.position.z + bd / 2 + 1.05); scene.add(rail);
+            });
+          });
+        }
+        // AC / tangki air di atap
+        if (rng() < 0.6) {
+          var tank = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.1, 8),
+            new THREE.MeshLambertMaterial({ color: 0x2A2A3A }));
+          tank.position.set(b.position.x + 2, h + 0.8, b.position.z); scene.add(tank);
+        }
+        // pohon / semak di sela gedung
+        if (rng() < 0.75) {
+          var tr = makeTree(); tr.position.set(bx + R(-7, 7), 0, bz + R(6, 9)); tr.scale.setScalar(R(0.8, 1.3)); scene.add(tr);
+        }
+        if (rng() < 0.6) {
+          var bush = new THREE.Mesh(new THREE.IcosahedronGeometry(R(0.5, 0.9), 0),
+            new THREE.MeshLambertMaterial({ color: 0x3E9B5F }));
+          bush.position.set(bx + R(-6, 6), 0.4, bz + R(-7, 7)); bush.scale.y = 0.6; scene.add(bush);
+        }
+      });
+    });
+
+    // ---- rumah kampung nelayan dekat pantai ----
+    for (var hi = 0; hi < 10; hi++) {
+      var hx = R(66, 76), hz = R(-120, 130);
+      if (Math.abs(hz - 30) < 8) continue;
+      var house = new THREE.Group();
+      var walls = new THREE.Mesh(new THREE.BoxGeometry(4.5, 2.6, 4),
+        new THREE.MeshLambertMaterial({ color: pick([0xE8A87C, 0x7FB3A0, 0xE8D5A3, 0xD97B7B]) }));
+      walls.position.y = 1.3; house.add(walls);
+      var hroof = new THREE.Mesh(new THREE.ConeGeometry(3.6, 1.6, 4),
+        new THREE.MeshLambertMaterial({ color: 0x8B4513 }));
+      hroof.position.y = 3.4; hroof.rotation.y = Math.PI / 4; house.add(hroof);
+      var door = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.8),
+        new THREE.MeshLambertMaterial({ color: 0x3A2418 }));
+      door.position.set(0, 0.9, 2.01); house.add(door);
+      var win = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.8),
+        new THREE.MeshBasicMaterial({ color: 0xFFD166 }));
+      win.position.set(-1.3, 1.5, 2.01); house.add(win);
+      house.position.set(hx, 0, hz); scene.add(house);
+      var ht = makeTree(); ht.position.set(hx + R(-4, 4), 0, hz + R(-4, 4)); scene.add(ht);
+    }
+
+    // ---- pohon deret di trotoar + rumput/semak sudut ----
+    for (var ti = 0; ti < 46; ti++) {
+      var tx = pick([14, 26, 54, 66, -26, -14]);
+      var tz = R(-140, 140);
+      var tree = makeTree(); tree.position.set(tx, 0, tz); tree.scale.setScalar(R(0.8, 1.4)); scene.add(tree);
+    }
+    for (var gi = 0; gi < 60; gi++) {
+      var grass = new THREE.Mesh(new THREE.ConeGeometry(0.35, R(0.5, 1.0), 5),
+        new THREE.MeshLambertMaterial({ color: pick([0x4E9B5F, 0x6BAE5A, 0x3E8B4F]) }));
+      grass.position.set(R(-60, 74), 0.3, R(-140, 140)); scene.add(grass);
+    }
+
+    // ---- mobil parkir + lalu lintas ----
+    var carColors = [0x2FA8B5, 0xFFD166, 0x7FB3A0, 0xE8E8E8, 0x3A6BD8, 0xC0392B, 0x8FA8D8];
+    for (var ci = 0; ci < 22; ci++) {
+      var c = makeCar(pick(carColors), false);
+      var lane = pick([14, 26, 54, -26, -14]);
+      c.position.set(lane + R(-1.5, 1.5), 0, R(-135, 135));
+      c.rotation.y = (rng() < 0.5 ? 0 : Math.PI) + R(-0.1, 0.1);
+      scene.add(c);
+    }
+
+    // ---- mobil pemain merah + polisi di belakang (arah kejar benar) ----
+    var player = makeCar(0xE8443A, false);
+    player.position.set(60, 0, 18); player.rotation.y = Math.PI; scene.add(player);
+    refs.player = player;
+    var pol1 = makeCar(0xF2F2F2, true); pol1.position.set(60, 0, 34); pol1.rotation.y = Math.PI; scene.add(pol1);
+    var pol2 = makeCar(0xF2F2F2, true); pol2.position.set(57.5, 0, 44); pol2.rotation.y = Math.PI; scene.add(pol2);
+    var pol3 = makeCar(0xF2F2F2, true); pol3.position.set(62.5, 0, 52); pol3.rotation.y = Math.PI; scene.add(pol3);
+    refs.police = [pol1, pol2, pol3];
+
+    // ---- helikopter + sorot melebar ke bawah + pool cahaya ----
+    var heli = new THREE.Group();
+    var hbody = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.6, 5.2),
+      new THREE.MeshLambertMaterial({ color: 0x2A3A55 }));
+    heli.add(hbody);
+    var tail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 5.5),
+      new THREE.MeshLambertMaterial({ color: 0x2A3A55 }));
+    tail.position.set(0, 0.3, -5); heli.add(tail);
+    var rotor = new THREE.Mesh(new THREE.BoxGeometry(9, 0.12, 0.7),
+      new THREE.MeshLambertMaterial({ color: 0x111111 }));
+    rotor.position.y = 1.1; heli.add(rotor);
+    var rotor2 = rotor.clone(); rotor2.rotation.y = Math.PI / 2; heli.add(rotor2);
+    var search = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xFFF6C8 }));
+    search.position.set(0, -0.9, 1.8); heli.add(search);
+    heli.position.set(60, 18, -10); scene.add(heli); // di depan mobil pemain, dalam frame S1 (dulu y=26/z=6: ~30° di atas pusat, off-frame)
+    refs.heli = heli;
+    // kerucut sorot: apex KECIL di heli, MELEBAR ke tanah. ConeGeometry apex di +Y,
+    // jadi TANPA rotation.x=PI (flip itu yang membaliknya: lebar di atas, titik di tanah).
+    var coneGeo = new THREE.ConeGeometry(7, 18, 24, 1, true);
+    var cone = new THREE.Mesh(coneGeo, new THREE.MeshBasicMaterial({
+      color: 0xFFF2B0, transparent: true, opacity: 0.28, side: THREE.DoubleSide,
+      depthWrite: false, blending: THREE.AdditiveBlending }));
+    cone.position.set(60, 9, -8); scene.add(cone); // apex y=18 di searchlight heli, alas r=7 di tanah
+    var pool = new THREE.Mesh(new THREE.CircleGeometry(7, 24),
+      new THREE.MeshBasicMaterial({ color: 0xFFE9A8, transparent: true, opacity: 0.4,
+        blending: THREE.AdditiveBlending, depthWrite: false }));
+    pool.rotation.x = -Math.PI / 2; pool.position.set(60, 0.12, -8); scene.add(pool);
+
+    // ---- banjir rob: air pasang masuk kota + sampah mengambang ----
+    var flood = new THREE.Mesh(new THREE.PlaneGeometry(150, 200),
+      new THREE.MeshLambertMaterial({ color: 0x2FA8B5, transparent: true, opacity: 0.55 }));
+    flood.rotation.x = -Math.PI / 2; flood.position.set(10, 0.55, -10); scene.add(flood);
+    for (var di = 0; di < 26; di++) {
+      var deb = new THREE.Mesh(new THREE.BoxGeometry(R(0.3, 1.1), 0.12, R(0.3, 0.8)),
+        new THREE.MeshLambertMaterial({ color: pick([0x8B5A2B, 0xE8443A, 0xFFD166, 0x3A3A3A, 0x7FB3A0]) }));
+      deb.position.set(R(-30, 60), 0.62, R(-60, 40));
+      deb.rotation.y = R(0, 3); scene.add(deb);
+    }
+    // garis air di dinding: pita teal di kaki gedung dekat banjir
+    for (var wi = 0; wi < 8; wi++) {
+      var stripe = new THREE.Mesh(new THREE.PlaneGeometry(R(6, 10), 0.9),
+        new THREE.MeshBasicMaterial({ color: 0x2FA8B5, transparent: true, opacity: 0.5 }));
+      stripe.position.set(R(-40, 40), 0.9, R(-50, 30));
+      stripe.rotation.y = R(0, 3); scene.add(stripe);
+    }
+
+    // ---- pasar: kios beratap di tiang + kerumunan ----
+    var kioskSigns = ['KIOS 7 · PAKET SARI', 'IKAN BAKAR 88', 'SAYUR BU SRI', 'BUAH ARUNIKA', 'KOPI ROB'];
+    kioskSigns.forEach(function (s, i) {
+      var k = makeKiosk(s);
+      k.position.set(-34 + i * 7, 0, -46 + (i % 2) * 5);
+      k.rotation.y = R(-0.3, 0.3); scene.add(k);
+    });
+    var shirts = [0xE8443A, 0x2FA8B5, 0xFFD166, 0x7FB3A0, 0xC98FD0, 0xE8E8E8, 0x3A6BD8];
+    for (var pi2 = 0; pi2 < 34; pi2++) {
+      var person = makePerson(pick(shirts));
+      // kerumunan di pasar, pantai, trotoar
+      var zone = pi2 % 3;
+      if (zone === 0) person.position.set(R(-40, -8), 0, R(-52, -34));
+      else if (zone === 1) person.position.set(R(70, 76), 0, R(-60, 90));
+      else person.position.set(R(-55, 55), 0, R(-130, 130));
+      person.rotation.y = R(0, 6.3);
+      scene.add(person); refs.people.push(person);
+    }
+    // polisi pejalan kaki di pasar (shot combat)
+    for (var pp = 0; pp < 3; pp++) {
+      var cop = makePerson(0x2244CC);
+      cop.position.set(-30 + pp * 4, 0, -40 + pp * 2); scene.add(cop); refs.people.push(cop);
+    }
+
+    // ---- hujan (shot malam) ----
+    if (night) {
+      var rainGeo = new THREE.BufferGeometry();
+      var pts = [];
+      for (var ri = 0; ri < 900; ri++) pts.push(R(-60, 80), R(0, 40), R(-80, 80));
+      rainGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+      var rain = new THREE.LineSegments(rainGeo,
+        new THREE.LineBasicMaterial({ color: 0x9AB8FF, transparent: true, opacity: 0.5 }));
+      scene.add(rain);
+      // jalan basah: pantulan lewat plane mengkilap tipis
+      var wet = new THREE.Mesh(new THREE.PlaneGeometry(160, 300),
+        new THREE.MeshLambertMaterial({ color: 0x1A2038, transparent: true, opacity: 0.35 }));
+      wet.rotation.x = -Math.PI / 2; wet.position.set(0, 0.08, 0); scene.add(wet);
+    }
+    return refs;
+  }
+  window.TAWorld = { buildWorld: buildWorld };
 })();

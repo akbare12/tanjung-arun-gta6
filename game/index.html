@@ -1,89 +1,228 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TANJUNG ARUN — BADAI ARUNIKA</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  html,body{margin:0;height:100%;overflow:hidden;background:#2b2140;font-family:Arial,Helvetica,sans-serif}
-  #c{position:fixed;inset:0;width:100%;height:100%;display:block}
-  #hud{position:fixed;inset:0;pointer-events:none;color:#fff;user-select:none}
-  .panel{background:rgba(12,10,24,.78);border:1px solid rgba(255,255,255,.22);border-radius:8px;
-    padding:8px 12px;box-shadow:0 2px 10px rgba(0,0,0,.45)}
-  .yellow{color:#FFD23F}.red{color:#FF5A4E}.teal{color:#4FD8E0}
-  .small{font-size:12px;letter-spacing:.08em}
-  .big{font-size:20px;font-weight:800;letter-spacing:.04em}
-  /* layout zones */
-  #tl{position:absolute;top:14px;left:14px}
-  #tc{position:absolute;top:14px;left:50%;transform:translateX(-50%);text-align:center;min-width:340px}
-  #tr{position:absolute;top:14px;right:14px;text-align:right}
-  #bl{position:absolute;bottom:16px;left:14px}
-  #br{position:absolute;bottom:16px;right:14px;text-align:right}
-  #dispatch{position:absolute;top:150px;left:14px;width:268px}
-  #dialog{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);width:520px;display:flex;gap:10px;align-items:center}
-  #floaters{position:absolute;inset:0}
-  .floater{position:absolute;font-weight:900;font-size:26px;color:#FFD23F;
-    text-shadow:0 2px 0 #7a2d00,0 0 14px rgba(255,180,60,.8)}
-  .floater.sub{font-size:18px;color:#fff}
-  .stars{font-size:22px;letter-spacing:2px;color:#FFD23F;text-shadow:0 0 8px rgba(255,210,63,.7)}
-  .stars .off{color:rgba(255,255,255,.35);text-shadow:none}
-  .bar{height:10px;background:rgba(255,255,255,.18);border-radius:5px;overflow:hidden;margin-top:4px}
-  .bar>i{display:block;height:100%;background:#FFD23F}
-  .bar.hp>i{background:#4ADE80}.bar.ar>i{background:#4FC3F7}
-  .row{display:flex;justify-content:space-between;gap:8px}
-  .unit{padding:5px 0;border-bottom:1px solid rgba(255,255,255,.12);font-size:13px}
-  .unit:last-child{border-bottom:0}
-  .unit b{color:#FFD23F}
-  .unit .tac{float:right;color:#4FD8E0;font-weight:700}
-  .portrait{width:52px;height:52px;border-radius:6px;flex:0 0 52px;display:flex;align-items:center;justify-content:center;
-    font-size:22px;font-weight:900;background:linear-gradient(135deg,#E86A92,#6B4A8F);border:2px solid #FFD23F}
-  /* minimap */
-  #minimapWrap{text-align:center}
-  #minimap{border-radius:50%;border:3px solid rgba(255,255,255,.85);box-shadow:0 0 0 3px rgba(0,0,0,.45),0 4px 14px rgba(0,0,0,.5);background:#1b2b4a}
-  #districtTag{margin-top:5px;font-size:12px;font-weight:700;letter-spacing:.06em;
-    text-shadow:0 1px 3px #000}
-  /* title screen */
-  #title{position:absolute;inset:0;background:linear-gradient(90deg,rgba(10,6,24,.88) 0%,rgba(10,6,24,.55) 46%,rgba(10,6,24,0) 78%)}
-  #titleInner{position:absolute;left:56px;top:64px;width:620px}
-  #gameTitle{font-size:64px;font-weight:900;line-height:.95;letter-spacing:.01em;
-    text-shadow:0 4px 0 #5b2a68,0 8px 24px rgba(0,0,0,.6)}
-  #gameTitle .a{color:#FFD23F}
-  #tagline{margin-top:10px;font-size:17px;color:#FFE9A8;letter-spacing:.06em}
-  #menu{margin-top:26px;font-size:19px;font-weight:700;line-height:1.9}
-  #menu .sel{color:#FFD23F}
-  #menu .sel:before{content:"▶ "}
-  #slots{position:absolute;left:56px;bottom:96px;display:flex;gap:14px}
-  .slot{width:238px;background:rgba(12,10,24,.82);border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:12px 14px}
-  .slot.sel{border-color:#FFD23F;box-shadow:0 0 0 2px rgba(255,210,63,.5)}
-  .slot h3{margin:0 0 6px;font-size:15px;color:#FFD23F}
-  .slot p{margin:3px 0;font-size:13px;color:#eee}
-  .slot .empty{color:#bbb;font-size:14px;padding:18px 0;text-align:center}
-  #shopStrip{position:absolute;right:56px;bottom:96px;width:300px}
-  #titleFoot{position:absolute;left:56px;bottom:26px;font-size:12px;color:#ddd;letter-spacing:.08em}
-  /* map screen */
-  #mapTitle{position:absolute;top:14px;left:14px}
-  #mapSide{position:absolute;right:14px;top:14px;width:330px}
-  #mapBottom{position:absolute;left:14px;right:14px;bottom:14px}
-  .mapLabel{position:absolute;transform:translate(-50%,-50%);font-weight:900;letter-spacing:.08em;
-    color:#fff;text-shadow:0 2px 4px #000,0 0 10px rgba(0,0,0,.8);white-space:nowrap}
-  .mapLabel.district{font-size:20px;color:#FFD23F}
-  .mapLabel.road{font-size:12px;color:#EAF6FF;font-weight:700}
-  .mapLabel.place{font-size:13px;color:#BFEFFF}
-  .missionList{font-size:13px;line-height:1.55}
-  .missionList .done{color:#7BE495}.missionList .cur{color:#FFD23F;font-weight:700}.missionList .lock{color:#999}
-  .chip{display:inline-block;background:rgba(255,210,63,.16);border:1px solid #FFD23F;border-radius:6px;
-    padding:2px 8px;margin:2px 4px 2px 0;font-size:12px;font-weight:700}
-  #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;
-    background:#2b2140;font-size:18px;letter-spacing:.1em;z-index:5}
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1280px; height:720px; overflow:hidden; background:#1a1030;
+    font-family:"Segoe UI",Arial,Helvetica,sans-serif; color:#fff; }
+  #gl { position:absolute; inset:0; }
+  #gl canvas { display:block; }
+  .hud { position:absolute; inset:0; pointer-events:none; z-index:5; }
+  .panel { background:rgba(10,8,24,.78); border:1px solid rgba(255,179,107,.45);
+    border-radius:8px; padding:8px 11px; box-shadow:0 2px 10px rgba(0,0,0,.45); }
+  .panel h3 { font-size:11px; letter-spacing:2px; color:#FFB36B; margin-bottom:5px; }
+  .panel .row { font-size:13px; line-height:1.45; }
+  .big { font-size:22px; font-weight:800; }
+  .gold { color:#FFD166; } .teal { color:#7FE3E0; } .pink { color:#FF8FB1; }
+  .small { font-size:11px; color:#CFC6E8; }
+  .stars { color:#FFD166; font-size:17px; letter-spacing:2px; }
+  /* chase */
+  #hud-chase .topleft { position:absolute; top:14px; left:14px; }
+  #hud-chase .topright { position:absolute; top:14px; right:14px; text-align:right; }
+  #hud-chase .dispatch { position:absolute; top:14px; left:50%; transform:translateX(-50%); width:330px; }
+  #hud-chase .dialog { position:absolute; bottom:118px; left:14px; width:360px; }
+  #hud-chase .minimap { position:absolute; bottom:14px; left:14px; width:158px; height:158px;
+    border-radius:50%; overflow:hidden; border:3px solid rgba(255,179,107,.7); background:#123; }
+  #hud-chase .floatscore { position:absolute; top:44%; left:56%; font-size:26px; font-weight:900;
+    color:#FFD166; text-shadow:0 2px 8px #000; }
+  #hud-chase .speedo { position:absolute; bottom:14px; right:14px; text-align:right; }
+  #hud-chase .missionbar { position:absolute; bottom:14px; left:190px; width:430px; }
+  /* combat */
+  #hud-combat .topleft { position:absolute; top:14px; left:14px; }
+  #hud-combat .topright { position:absolute; top:14px; right:14px; text-align:right; }
+  #hud-combat .vitals { position:absolute; bottom:14px; left:14px; width:300px; }
+  #hud-combat .weapons { position:absolute; bottom:14px; right:14px; width:280px; }
+  #hud-combat .minimap { position:absolute; bottom:170px; left:14px; width:130px; height:130px;
+    border-radius:50%; overflow:hidden; border:3px solid rgba(255,179,107,.7); background:#123; }
+  #hud-combat .dispatch { position:absolute; top:14px; left:50%; transform:translateX(-50%); width:300px; }
+  #hud-combat .floatscore { position:absolute; top:38%; left:60%; font-size:26px; font-weight:900;
+    color:#FF6B6B; text-shadow:0 2px 8px #000; }
+  .bar { height:9px; background:#33284f; border-radius:5px; overflow:hidden; margin:3px 0 7px; }
+  .bar > i { display:block; height:100%; }
+  .wslot { display:flex; justify-content:space-between; font-size:13px; padding:3px 0;
+    border-bottom:1px solid rgba(255,255,255,.12); }
+  .wslot.sel { color:#FFD166; font-weight:700; }
+  /* title */
+  #hud-title { background:linear-gradient(180deg, rgba(20,8,40,.25), rgba(20,8,40,.55)); }
+  #hud-title .titleblock { position:absolute; top:52px; left:0; right:0; text-align:center; }
+  #hud-title .titleblock h1 { font-size:58px; letter-spacing:6px; color:#fff;
+    text-shadow:0 3px 0 #6B4A8F, 0 6px 22px #000; }
+  #hud-title .titleblock h2 { font-size:20px; letter-spacing:8px; color:#FFB36B; margin-top:2px; }
+  #hud-title .titleblock p { font-size:14px; color:#FFE9C9; margin-top:8px; }
+  #hud-title .saves { position:absolute; left:60px; top:250px; width:430px; }
+  #hud-title .crew { position:absolute; right:60px; top:250px; width:400px; }
+  #hud-title .radio { position:absolute; left:60px; bottom:64px; width:430px; }
+  #hud-title .footer { position:absolute; bottom:16px; left:0; right:0; text-align:center;
+    font-size:12px; color:#E8D5A3; letter-spacing:1px; }
+  .slot { display:flex; justify-content:space-between; font-size:13px; padding:6px 2px;
+    border-bottom:1px solid rgba(255,255,255,.15); }
+  .slot b { color:#FFD166; }
+  /* map */
+  #hud-map { background:#14102a; }
+  #hud-map .mapwrap { position:absolute; left:14px; top:14px; width:760px; height:640px; }
+  #hud-map .mapwrap canvas { width:760px; height:640px; border-radius:10px;
+    border:2px solid rgba(255,179,107,.6); }
+  #hud-map .side { position:absolute; right:14px; top:14px; width:470px; }
+  #hud-map .side .panel { margin-bottom:10px; }
+  #hud-map .mission { display:flex; justify-content:space-between; font-size:13px;
+    padding:5px 0; border-bottom:1px solid rgba(255,255,255,.12); }
+  .done { color:#7FE3E0; } .active { color:#FFD166; font-weight:700; } .locked { color:#8d84ad; }
+  .hidden { display:none !important; }
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
-<div id="hud"></div>
-<div id="loading">MEMUAT TANJUNG ARUN…</div>
-<script src="./vendor/three.min.js"></script>
-<script src="./src/world.js"></script>
-<script src="./src/hud.js"></script>
-<script src="./src/main.js"></script>
+<div id="gl"></div>
+
+<!-- ============ SHOT 1 : CHASE ============ -->
+<div id="hud-chase" class="hud hidden">
+  <div class="panel topleft">
+    <h3>HARI 2 &middot; 17:40 &middot; BADAI 4D 0H &middot; CAT 2</h3>
+    <div class="row"><span class="gold big">Rp 12.000.000</span> &nbsp; <span class="teal">SKOR 150</span></div>
+    <div class="row small">LV2 GETAWAY KID &nbsp; XP 180/400 &nbsp; MISI 2/8</div>
+    <div class="stars">&#9733;&#9733;&#9734;&#9734;&#9734;</div>
+    <div class="row small">WANTED &middot; POLRES TANJUNG ARUN</div>
+  </div>
+  <div class="panel topright">
+    <h3>CUACA &middot; SENJA BERANGIN</h3>
+    <div class="row">ANGIN 42 KM/J &middot; ROB +0,8 M</div>
+    <div class="row small">RADIO: <span class="gold">ARUN FM 98.4</span> &middot; DJ LESTARI</div>
+    <div class="row small">STASIUN: ARUN FM &middot; GELOMBANG PANTAI 91.2 &middot; DANGDUT ROB 87.7</div>
+  </div>
+  <div class="panel dispatch">
+    <h3>DISPATCH POLISI &middot; KANAL 7</h3>
+    <div class="row">&#128680; KITE-1 &middot; 15 m &middot; <span class="pink">RAMMING</span></div>
+    <div class="row">&#128680; CORAL-48 &middot; 28 m &middot; <span class="pink">SPOTLIGHT</span></div>
+    <div class="row">&#128680; BADAI-7 &middot; 61 m &middot; <span class="pink">ROADBLOCK</span></div>
+    <div class="row small">HELI ELANG-2 di atasmu &mdash; jangan masuk JALAN DERMAGA, ada blokade.</div>
+  </div>
+  <div class="panel dialog">
+    <h3>FIXER &middot; BANG JOEL</h3>
+    <div class="row">&ldquo;Bro, polisi nempel di ekor lo! Belok kanan ke <b>JALAN DERMAGA</b>,
+    perahu <b>SRI ARUNIKA</b> udah nunggu di pier. Jangan berhenti, rob naik!&rdquo;</div>
+    <div class="row small" style="margin-top:4px">KONTAK: JOEL (FIXER) &middot; SARI (DRIVER) &middot; UJANG (MEKANIK) &middot; RATNA (INFO)</div>
+  </div>
+  <div class="minimap"><canvas id="mm1" width="158" height="158"></canvas></div>
+  <div class="floatscore">+150 &middot; Lolos Blokade!</div>
+  <div class="panel speedo">
+    <div class="big gold">142 <span style="font-size:13px">KM/J</span></div>
+    <div class="row small">KONDISI MOBIL 92% &middot; BENSIN 71%</div>
+  </div>
+  <div class="panel missionbar">
+    <h3>MISI 2/8 &middot; &ldquo;ROB PERTAMA&rdquo; &middot; CHAPTER 2: PASANG NAIK</h3>
+    <div class="row">NEXT: capai <b>DERMAGA SRI ARUNIKA</b> sebelum ELANG-2 memotong jalan.</div>
+    <div class="row small">DISTRIK: PANTAI ROB &middot; STANDING: NETRAL 58</div>
+  </div>
+</div>
+
+<!-- ============ SHOT 2 : COMBAT (malam hujan) ============ -->
+<div id="hud-combat" class="hud hidden">
+  <div class="panel topleft">
+    <h3>HARI 3 &middot; 02:15 &middot; BADAI 3D 15H &middot; CAT 3</h3>
+    <div class="row"><span class="gold big">Rp 21.750.000</span> &nbsp; <span class="teal">SKOR 187</span></div>
+    <div class="row small">LV3 STREET RUNNER &nbsp; XP 260/400 &nbsp; MISI 3/8</div>
+    <div class="stars">&#9733;&#9733;&#9733;&#9734;&#9734;</div>
+    <div class="row small">HUJAN DERAS &middot; ROB +1,4 M &middot; PASAR ARUN BANJIR</div>
+  </div>
+  <div class="panel topright">
+    <h3>RADIO &middot; GELOMBANG PANTAI 91.2</h3>
+    <div class="row small">DJ MARIO &mdash; &ldquo;Hujan gini, rob naik, polisi makin galak.&rdquo;</div>
+    <div class="row small">CUACA: HUJAN 22 MM/J &middot; ANGIN 61 KM/J</div>
+  </div>
+  <div class="panel dispatch">
+    <h3>DISPATCH POLISI &middot; KANAL 7</h3>
+    <div class="row">&#128680; KITE-1 &middot; 9 m &middot; <span class="pink">MENGEPUNG</span></div>
+    <div class="row">&#128680; CORAL-48 &middot; 22 m &middot; <span class="pink">SPOTLIGHT</span></div>
+    <div class="row small">2 unit di atap pasar &mdash; awas tembakan dari atas kios!</div>
+  </div>
+  <div class="minimap"><canvas id="mm2" width="130" height="130"></canvas></div>
+  <div class="panel vitals">
+    <h3>ARUN &middot; LV3 &middot; MISI 3/8 &ldquo;PASAR GELAP&rdquo;</h3>
+    <div class="row small">HEALTH</div><div class="bar"><i style="width:82%; background:#4ADE80"></i></div>
+    <div class="row small">ARMOUR</div><div class="bar"><i style="width:64%; background:#60A5FA"></i></div>
+    <div class="row">HP 82 &middot; ARMOUR 64 &middot; NEXT: rebut <b>PAKET SARI</b> di kios 7</div>
+  </div>
+  <div class="panel weapons">
+    <h3>SENJATA</h3>
+    <div class="wslot sel">PISTOL &mdash; P226 &nbsp; <span>12/48</span></div>
+    <div class="wslot">SMG &mdash; MP5 &nbsp; <span>32/128</span></div>
+    <div class="wslot">SHOTGUN &mdash; PUMP &nbsp; <span>6/24</span></div>
+    <div class="wslot">SENAPAN &mdash; KAR-9 &nbsp; <span>8/40</span></div>
+    <div class="wslot">RPG &mdash; TERKUNCI &nbsp; <span>Rp 9.000.000</span></div>
+    <div class="row small" style="margin-top:5px">BENGKEL UJANG: REPAIR Rp 300.000 &middot; ARMOUR Rp 450.000</div>
+  </div>
+  <div class="floatscore">+500 &middot; HEADSHOT!</div>
+</div>
+
+<!-- ============ SHOT 3 : TITLE ============ -->
+<div id="hud-title" class="hud hidden">
+  <div class="titleblock">
+    <h1>TANJUNG ARUN</h1>
+    <h2>BADAI ARUNIKA</h2>
+    <p>KOTA PESISIR &middot; 7 HARI MENUJU BADAI &middot; 6 DISTRIK &middot; 8 MISI CERITA &middot; SBPD PURSUIT AI</p>
+  </div>
+  <div class="panel saves">
+    <h3>LANJUTKAN &middot; SAVE FILE</h3>
+    <div class="slot"><span><b>SLOT 1</b> &middot; PANTAI ROB</span><span>Day 4 09:05 &middot; 46% &middot; Rp 38.420.000</span></div>
+    <div class="slot"><span><b>SLOT 2</b> &middot; PASAR ARUN</span><span>Day 3 02:15 &middot; 31% &middot; Rp 21.750.000</span></div>
+    <div class="slot"><span><b>SLOT 3</b> &middot; PELABUHAN</span><span>Day 2 17:40 &middot; 18% &middot; Rp 12.000.000</span></div>
+    <div class="row small" style="margin-top:6px">BARU: CERITA BARU &middot; MUAT ULANG TERAKHIR: SLOT 1, 09:05</div>
+  </div>
+  <div class="panel crew">
+    <h3>KRU &middot; THE LOW TIDE CREW</h3>
+    <div class="row">JOEL &mdash; FIXER &middot; &ldquo;Semua jalan ada harganya.&rdquo;</div>
+    <div class="row">SARI &mdash; DRIVER &middot; LV4 &middot; ESCAPE 12&times;</div>
+    <div class="row">UJANG &mdash; MEKANIK &middot; BENGKEL DERMAGA</div>
+    <div class="row">RATNA &mdash; INFO &middot; MATA-MATA PELABUHAN</div>
+    <div class="row small" style="margin-top:5px">NEXT JOB: MISI 5/8 &ldquo;JEMBATAN TERAKHIR&rdquo; &middot; Rp 4.200.000</div>
+  </div>
+  <div class="panel radio">
+    <h3>RADIO &middot; STASIUN TANJUNG ARUN</h3>
+    <div class="row small">ARUN FM 98.4 &mdash; DJ LESTARI &middot; GELOMBANG PANTAI 91.2 &mdash; DJ MARIO</div>
+    <div class="row small">DANGDUT ROB 87.7 &mdash; DJ YANTI &middot; SUARA BADAI 104.5 &mdash; BERITA CUACA</div>
+  </div>
+  <div class="footer">ENTER LANJUTKAN &middot; N CERITA BARU &middot; M PETA &middot; R RADIO &middot; ESC PENGATURAN &middot; v7 &middot; BADAI TIBA 2D 9H</div>
+</div>
+
+<!-- ============ SHOT 4 : MAP ============ -->
+<div id="hud-map" class="hud hidden">
+  <div class="mapwrap"><canvas id="bigmap" width="760" height="640"></canvas></div>
+  <div class="side">
+    <div class="panel">
+      <h3>PETA TANJUNG ARUN &middot; HARI 4 &middot; 09:05 &middot; BADAI 2D 9H &middot; CAT 4</h3>
+      <div class="row"><span class="gold big">Rp 38.420.000</span> &nbsp; <span class="teal">SKOR 239</span></div>
+      <div class="row small">LV5 &middot; KOLEKSI 15/24 &middot; 46% SELESAI &middot; MISI 5/8 &middot; ROB +1,9 M</div>
+    </div>
+    <div class="panel">
+      <h3>DAFTAR MISI &middot; CHAPTER 4: AIR NAIK</h3>
+      <div class="mission"><span class="done">1 &middot; KEDATANGAN &mdash; DONE</span><span>Rp 1.500.000</span></div>
+      <div class="mission"><span class="done">2 &middot; ROB PERTAMA &mdash; DONE</span><span>Rp 3.000.000</span></div>
+      <div class="mission"><span class="done">3 &middot; PASAR GELAP &mdash; DONE</span><span>Rp 4.800.000</span></div>
+      <div class="mission"><span class="done">4 &middot; JALAN DERMAGA &mdash; DONE</span><span>Rp 5.500.000</span></div>
+      <div class="mission"><span class="active">5 &middot; JEMBATAN TERAKHIR &mdash; ACTIVE</span><span>Rp 4.200.000</span></div>
+      <div class="mission"><span class="locked">6 &middot; BADAI DATANG &mdash; LOCKED</span><span>Rp 6.000.000</span></div>
+      <div class="mission"><span class="locked">7 &middot; EVAKUASI ROB &mdash; LOCKED</span><span>Rp 7.500.000</span></div>
+      <div class="mission"><span class="locked">8 &middot; MATA BADAI &mdash; LOCKED</span><span>Rp 12.000.000</span></div>
+    </div>
+    <div class="panel">
+      <h3>DISTRIK &middot; STANDING</h3>
+      <div class="row small">PANTAI ROB &mdash; NETRAL 58 &middot; PELABUHAN &mdash; DIKUASAI 71</div>
+      <div class="row small">PASAR ARUN &mdash; RESPECTED &middot; polisi cari 30% lebih singkat</div>
+      <div class="row small">KOTA LAMA &mdash; NETRAL 44 &middot; KAMPUNG NELAYAN &mdash; RAMAH 82</div>
+      <div class="row small">DERMAGA &mdash; PANAS &middot; blokade aktif &middot; STASIUN &mdash; NETRAL 50</div>
+    </div>
+    <div class="panel">
+      <h3>LEGENDA</h3>
+      <div class="row small">&#128674; PERAHU &middot; &#9875; DERMAGA &middot; &#127968; SAFEHOUSE &middot; &#128680; POLISI &middot; &#11088; MISI AKTIF &middot; &#127754; BANJIR ROB</div>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="src/world.js"></script>
+<script src="src/hud.js"></script>
+<script src="src/main.js"></script>
 </body>
 </html>
